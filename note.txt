@@ -1,0 +1,5 @@
+You can replace the static sidebar with a button toggle if you want a more “app-like” feel later:
+
+Show a ☰ menu icon on mobile.
+
+Use state to open/close the sidebar (fixed top-0 left-0 h-full overlay style).
