@@ -12,9 +12,9 @@ My Finance is a personal finance management application built with TypeScript, C
 
 ## Technology Stack
 
-- **TypeScript** (93.1%): Main application logic and structure
-- **CSS** (4.7%): Styling and responsive UI
-- **JavaScript** (2.2%): Additional scripting and interactivity
+- **TypeScript** : Main application logic and structure
+- **CSS** : Styling and responsive UI
+- **JavaScript** : Additional scripting and interactivity
 
 ## Getting Started
 
