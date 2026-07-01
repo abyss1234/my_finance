@@ -49,7 +49,7 @@ export default function HomePage() {
         <button className="btn" onClick={refreshAll}>Refresh</button>
       </div>
 
-      <TransactionList refreshKey={refreshKey} />
+      <TransactionList refreshKey={refreshKey} onChanged={refreshAll} />
     </main>
   );
 }

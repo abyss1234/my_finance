@@ -1,5 +1,5 @@
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
+import AppShell from '@/components/AppShell';
 
 export const metadata = {
   title: process.env.NEXT_PUBLIC_APP_NAME || 'Simple Finance',
@@ -22,10 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </header>
 
-          <div className="grid flex-1 gap-6 md:grid-cols-[14rem_1fr]">
-            <Sidebar />
-            <div className="min-w-0 space-y-6">{children}</div>
-          </div>
+          <AppShell>{children}</AppShell>
 
           <footer className="mt-10 border-t border-zinc-200 pt-4 text-center text-xs text-zinc-500">
             Built with Next.js + Prisma + Tailwind

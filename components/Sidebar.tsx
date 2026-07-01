@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 const navItems = [
   { href: '/', label: 'Home' },
@@ -27,6 +27,13 @@ const NavItem = ({ href, label, pathname }: { href: string; label: string; pathn
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    router.replace('/login');
+    router.refresh();
+  }
 
   return (
     <aside className="sticky top-5 h-fit w-full rounded-lg border border-zinc-200 bg-white p-3 shadow-sm md:w-56">
@@ -38,6 +45,9 @@ export default function Sidebar() {
           <NavItem key={item.href} href={item.href} label={item.label} pathname={pathname} />
         ))}
       </nav>
+      <button className="mt-4 w-full text-left text-sm font-medium text-zinc-500 hover:text-zinc-950" onClick={logout}>
+        Logout
+      </button>
     </aside>
   );
 }

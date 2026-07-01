@@ -3,13 +3,14 @@ const prisma = new PrismaClient();
 
 async function main() {
   const expense = [
+    'Uncategorized',
     'Food',
     'Transportation',
     'Bill & Utilities',
     'Entertainment',
     'Others',
   ];
-  const income = ['Salary', 'Investment', 'Others'];
+  const income = ['Uncategorized', 'Salary', 'Investment', 'Others'];
 
   for (const name of expense) {
     await prisma.category.upsert({

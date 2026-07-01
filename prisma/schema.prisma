@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum TransactionType {
@@ -13,24 +14,30 @@ enum TransactionType {
 }
 
 model Category {
-  id        Int      @id @default(autoincrement())
-  name      String
-  kind      TransactionType
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int             @id @default(autoincrement())
+  name         String
+  kind         TransactionType
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   // example: Food (EXPENSE), Salary (INCOME)
   transactions Transaction[]
+
   @@unique([name, kind])
 }
 
 model Transaction {
-  id          Int             @id @default(autoincrement())
-  type        TransactionType
-  amount      Decimal         @db.Decimal(12,2)
-  date        DateTime        @default(now())
-  note        String?
-  categoryId  Int
-  category    Category        @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id           Int             @id @default(autoincrement())
+  type         TransactionType
+  amount       Decimal         @db.Decimal(12, 2)
+  date         DateTime        @default(now())
+  note         String?
+  source       String?
+  counterparty String?
+  externalRef  String?
+  rawBody      String?
+  importedAt   DateTime?
+  categoryId   Int
+  category     Category        @relation(fields: [categoryId], references: [id])
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
