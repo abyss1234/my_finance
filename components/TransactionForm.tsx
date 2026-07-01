@@ -3,48 +3,74 @@
 import useSWR from 'swr';
 import { useState, useMemo } from 'react';
 
-type Category = { id: number; name: string; kind: 'INCOME'|'EXPENSE' };
-const fetcher = (url: string) => fetch(url).then(r => r.json());
+type Category = { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
+
+const fetcher = async <T,>(url: string): Promise<T> => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+  return (await response.json()) as T;
+};
 
 export default function TransactionForm({ onCreated }: { onCreated?: () => void }) {
-  const { data: categories } = useSWR<Category[]>('/api/categories', fetcher);
+  const { data: categories, error: categoriesError } = useSWR<Category[]>('/api/categories', fetcher);
 
-  const [type, setType] = useState<'INCOME'|'EXPENSE'>('EXPENSE');
+  const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const options = useMemo(
     () => (categories ?? []).filter(c => c.kind === type),
     [categories, type]
   );
 
   async function submit(formData: FormData) {
-    const payload = {
-      type,
-      amount: Number(formData.get('amount')),
-      date: formData.get('date') || undefined,
-      note: (formData.get('note') as string) || undefined,
-      categoryId: Number(formData.get('categoryId')),
-    };
-    const res = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      (document.getElementById('tx-form') as HTMLFormElement)?.reset();
-      onCreated?.();
-    } else {
-      alert('Failed to save');
+    setError('');
+    setIsSaving(true);
+
+    try {
+      const payload = {
+        type,
+        amount: Number(formData.get('amount')),
+        date: formData.get('date') || undefined,
+        note: (formData.get('note') as string) || undefined,
+        categoryId: Number(formData.get('categoryId')),
+      };
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        (document.getElementById('tx-form') as HTMLFormElement)?.reset();
+        onCreated?.();
+        return;
+      }
+
+      const body = await res.json().catch(() => null);
+      setError(body?.error ?? 'Failed to save transaction.');
+    } catch {
+      setError('Failed to save transaction.');
+    } finally {
+      setIsSaving(false);
     }
   }
 
   return (
     <form id="tx-form" className="card p-4" action={submit}>
-      <div className="mb-3 flex gap-2">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-800">Add Transaction</h2>
+          <p className="text-sm text-zinc-500">Record a new income or expense entry.</p>
+        </div>
+      </div>
+
+      <div className="mb-4 inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-1">
         <button type="button"
-          className={`btn ${type==='EXPENSE'?'bg-zinc-100':''}`}
-          onClick={() => setType('EXPENSE')}>Expense</button>
+          className={`rounded px-3 py-1.5 text-sm font-medium ${type === 'EXPENSE' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-600'}`}
+          onClick={() => { setType('EXPENSE'); setError(''); }}>Expense</button>
         <button type="button"
-          className={`btn ${type==='INCOME'?'bg-zinc-100':''}`}
-          onClick={() => setType('INCOME')}>Income</button>
+          className={`rounded px-3 py-1.5 text-sm font-medium ${type === 'INCOME' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-600'}`}
+          onClick={() => { setType('INCOME'); setError(''); }}>Income</button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -71,8 +97,16 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
         </div>
       </div>
 
-      <div className="mt-4">
-        <button className="btn">Add {type === 'EXPENSE' ? 'Expense' : 'Income'}</button>
+      {(error || categoriesError) && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error || 'Failed to load categories.'}
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-end">
+        <button className="btn" disabled={isSaving || options.length === 0}>
+          {isSaving ? 'Saving...' : `Add ${type === 'EXPENSE' ? 'Expense' : 'Income'}`}
+        </button>
       </div>
     </form>
   );

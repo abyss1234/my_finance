@@ -1,71 +1,143 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { Prisma } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
+
+type CreateTransactionBody = {
+  type?: unknown;
+  amount?: unknown;
+  date?: unknown;
+  note?: unknown;
+  categoryId?: unknown;
+};
+
+function parseTransactionType(value: string | null) {
+  if (value === TransactionType.INCOME || value === TransactionType.EXPENSE) return value;
+  return null;
+}
+
+function parseDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const type = searchParams.get('type'); // INCOME | EXPENSE | null
-  const from = searchParams.get('from'); // ISO
-  const to   = searchParams.get('to');   // ISO
-  const categoryId = searchParams.get('categoryId'); // number or null
-  const page = Math.max(1, Number(searchParams.get('page') || '1'));
-  const pageSize = [10, 20, 50].includes(Number(searchParams.get('pageSize')))
-    ? Number(searchParams.get('pageSize'))
-    : 10;
+  try {
+    const { searchParams } = new URL(req.url);
+    const type = parseTransactionType(searchParams.get('type'));
+    const from = parseDate(searchParams.get('from'));
+    const to = parseDate(searchParams.get('to'));
+    const rawCategoryId = searchParams.get('categoryId');
+    let categoryId: number | undefined;
+    const requestedPage = Number(searchParams.get('page') || '1');
+    const requestedPageSize = Number(searchParams.get('pageSize') || '10');
+    const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const pageSize = [10, 20, 50].includes(requestedPageSize) ? requestedPageSize : 10;
 
-  const where: Prisma.TransactionWhereInput = {};
-  if (type === 'INCOME' || type === 'EXPENSE') where.type = type as any;
-  if (from || to) {
-    where.date = {};
-    if (from) (where.date as any).gte = new Date(from);
-    if (to) (where.date as any).lte = new Date(to);
+    if (from === undefined || to === undefined) {
+      return NextResponse.json({ error: 'Invalid date range' }, { status: 400 });
+    }
+
+    if (rawCategoryId) {
+      const parsedCategoryId = Number(rawCategoryId);
+      if (!Number.isInteger(parsedCategoryId) || parsedCategoryId < 1) {
+        return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+      }
+      categoryId = parsedCategoryId;
+    }
+
+    const where: Prisma.TransactionWhereInput = {};
+    if (type) where.type = type;
+    if (from || to) {
+      const date: Prisma.DateTimeFilter = {};
+      if (from) date.gte = from;
+      if (to) date.lte = to;
+      where.date = date;
+    }
+    if (categoryId !== undefined) where.categoryId = categoryId;
+
+    const [items, totals, totalCount] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        include: { category: true },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.transaction.groupBy({
+        by: ['type'],
+        _sum: { amount: true },
+        where,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    const sumIncome =
+      totals.find((total) => total.type === TransactionType.INCOME)?._sum.amount?.toNumber() ?? 0;
+    const sumExpense =
+      totals.find((total) => total.type === TransactionType.EXPENSE)?._sum.amount?.toNumber() ?? 0;
+
+    return NextResponse.json({
+      items,
+      totals: { income: sumIncome, expense: sumExpense, net: sumIncome - sumExpense },
+      page,
+      pageSize,
+      totalCount,
+    });
+  } catch {
+    return NextResponse.json({ error: 'Failed to load transactions' }, { status: 500 });
   }
-  if (categoryId) where.categoryId = Number(categoryId);
-
-  const [items, totals, totalCount] = await Promise.all([
-    prisma.transaction.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      include: { category: true },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.transaction.groupBy({
-      by: ['type'],
-      _sum: { amount: true },
-      where,
-    }),
-    prisma.transaction.count({ where }),
-  ]);
-
-  const sumIncome =
-    totals.find(t => t.type === 'INCOME')?._sum.amount?.toNumber() ?? 0;
-  const sumExpense =
-    totals.find(t => t.type === 'EXPENSE')?._sum.amount?.toNumber() ?? 0;
-
-  return NextResponse.json({
-    items,
-    totals: { income: sumIncome, expense: sumExpense, net: sumIncome - sumExpense },
-    page,
-    pageSize,
-    totalCount,
-  });
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  // { type, amount, date?, note?, categoryId }
-  if (!body?.type || !body?.amount || !body?.categoryId) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  try {
+    const body = (await req.json()) as CreateTransactionBody;
+    const type = parseTransactionType(typeof body.type === 'string' ? body.type : null);
+    const amount = Number(body.amount);
+    const categoryId = Number(body.categoryId);
+    let date: Date | undefined = new Date();
+    const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim() : null;
+
+    if (typeof body.date === 'string' && body.date) {
+      date = parseDate(body.date) ?? undefined;
+    }
+
+    if (!type) return NextResponse.json({ error: 'Invalid transaction type' }, { status: 400 });
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 });
+    }
+    if (!Number.isInteger(categoryId) || categoryId < 1) {
+      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+    }
+    if (date === undefined) {
+      return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+    }
+
+    const category = await prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { kind: true },
+    });
+
+    if (!category) return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+    if (category.kind !== type) {
+      return NextResponse.json(
+        { error: 'Category type does not match transaction type' },
+        { status: 400 }
+      );
+    }
+
+    const created = await prisma.transaction.create({
+      data: {
+        type,
+        amount: new Prisma.Decimal(amount),
+        date,
+        note,
+        categoryId,
+      },
+    });
+
+    return NextResponse.json(created, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to save transaction' }, { status: 500 });
   }
-  const created = await prisma.transaction.create({
-    data: {
-      type: body.type,
-      amount: new Prisma.Decimal(body.amount),
-      date: body.date ? new Date(body.date) : new Date(),
-      note: body.note ?? null,
-      categoryId: Number(body.categoryId),
-    },
-  });
-  return NextResponse.json(created, { status: 201 });
 }

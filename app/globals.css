@@ -1,41 +1,27 @@
 @import "tailwindcss";
-/* @import "tailwindcss/preflight"; */
-
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 @layer components {
-  .card { @apply rounded-lg border border-zinc-200 bg-white shadow-sm; }
-  .btn  { @apply inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium border border-zinc-300 hover:bg-zinc-50; }
-  .input{ @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-300; }
-  .select{ @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-300; }
-  .label{ @apply text-sm font-medium text-zinc-700; }
-  .btn:active { @apply scale-[0.98]; }
-}
+  .card {
+    @apply rounded-lg border border-zinc-200 bg-white shadow-sm;
+  }
 
-/* :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300 disabled:cursor-not-allowed disabled:opacity-50;
+  }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  .input {
+    @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-zinc-300;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  .select {
+    @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-zinc-300;
+  }
+
+  .label {
+    @apply mb-1 block text-sm font-medium text-zinc-700;
+  }
+
+  .btn:active:not(:disabled) {
+    @apply scale-[0.98];
   }
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-} */
