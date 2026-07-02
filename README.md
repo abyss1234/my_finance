@@ -1,93 +1,141 @@
 # My Finance
 
-My Finance is a personal finance management application built with TypeScript, CSS, and JavaScript. It provides a sleek and intuitive interface to manage budgets, track expenses, and visualize financial data. Designed for efficiency and security, My Finance helps you gain insights into your financial habits and plan better for the future.
+A simple personal finance app built with Next.js, Prisma, PostgreSQL, and Tailwind CSS.
 
 ## Features
 
-- **Expense Tracking:** Record and categorize your day-to-day spending.
-- **Budget Management:** Set monthly budgets for different categories with real-time progress updates.
-- **Interactive Charts:** Visualize income, expenses, and savings trends using dynamic graphs.
-- **Responsive Design:** Fully optimized for desktops, tablets, and mobile devices.
-- **Secure Data Storage:** Options for local or cloud-based storage to keep your financial information safe.
+- Add, edit, and delete income/expense transactions
+- Category-based transaction tracking
+- Dashboard summary and analysis charts
+- MacroDroid API endpoint for phone notification imports
+- Simple password login for the web app
+- API key protection for MacroDroid requests
 
-## Technology Stack
+## Tech Stack
 
-- **TypeScript** (93.1%): Main application logic and structure
-- **CSS** (4.7%): Styling and responsive UI
-- **JavaScript** (2.2%): Additional scripting and interactivity
+- Next.js 16
+- React 19
+- Prisma 6
+- PostgreSQL
+- Tailwind CSS
+- Chart.js
 
-## Getting Started
+## Environment Variables
 
-### Prerequisites
+Create `.env`:
 
-- [Node.js](https://nodejs.org/) (version 18 or later recommended)
-- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require"
+DIRECT_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require"
 
-### Installation
+APP_PASSWORD="your-login-password"
+APP_SESSION_SECRET="random-long-secret"
+MACRODROID_API_KEY="your-phone-api-key"
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/abyss1234/my_finance.git
-   cd my_finance
-   ```
+NEXT_PUBLIC_APP_NAME="Simple Finance"
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
+For Vercel + Neon:
 
-3. **Run the application**
-   ```bash
-   npm start
-   # or
-   yarn start
-   ```
+- `DATABASE_URL` should use the pooled Neon URL, usually with `-pooler`
+- `DIRECT_URL` should use the direct Neon URL, without `-pooler`
 
-### Build for Production
+## Local Setup
 
 ```bash
+npm install
+npx prisma migrate deploy
+npx prisma db seed
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+For phone access on the same WiFi:
+
+```bash
+npm run dev -- -H 0.0.0.0
+```
+
+Then use your laptop WiFi IP, for example:
+
+```text
+http://192.168.100.4:3000
+```
+
+## MacroDroid API
+
+Endpoint:
+
+```text
+POST /api/macrodroid
+```
+
+Local WiFi example:
+
+```text
+http://192.168.100.4:3000/api/macrodroid
+```
+
+Vercel example:
+
+```text
+https://your-project.vercel.app/api/macrodroid
+```
+
+Required header:
+
+```text
+x-api-key: your-phone-api-key
+```
+
+Example JSON body:
+
+```json
+{
+  "app": "TNG eWallet",
+  "title": "Transfer Successful.",
+  "text": "RM 0.10 has been successfully transferred to KATHERINE TIONG WEI NI.",
+  "time": "1782909512135"
+}
+```
+
+## Vercel Deploy
+
+1. Push the project to GitHub.
+2. Import the repo in Vercel.
+3. Set the root directory if needed:
+
+```text
+project/myfinance_app
+```
+
+4. Add all environment variables in Vercel.
+5. Deploy.
+
+Before using the deployed app, run migrations against the production database:
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+## Scripts
+
+```bash
+npm run dev
 npm run build
-# or
-yarn build
+npm run start
+npm run lint
 ```
 
-The optimized build will be output to the `dist` folder.
+## Notes
 
-## Usage
-
-After starting the development server, open [http://localhost:3000](http://localhost:3000) in your browser. Create your account (if required), set up budgets, and begin tracking your finances.
-
-## Folder Structure
-
-```
-my_finance/
-├── src/
-│   ├── components/      # UI components
-│   ├── pages/           # Application pages
-│   ├── styles/          # CSS styles
-│   ├── utils/           # Utility functions
-│   └── index.tsx        # Main entry point
-├── public/              # Static assets
-├── package.json
-└── README.md
-```
-
-## Issues
-
-If you find a bug or have a feature request, please open an [issue](https://github.com/abyss1234/my_finance/issues).
-
-## License
-
-This project is [MIT Licensed](LICENSE).
-
-## Acknowledgments
-
-- [TypeScript](https://www.typescriptlang.org/)
-- [Chart.js](https://www.chartjs.org/) or any data visualization library used
-- [React](https://react.dev/) if applicable
-
----
-
-**abyss1234/my_finance** - Modern personal finance management made easy.
+- Do not commit `.env`.
+- MacroDroid must send `x-api-key`.
+- Web users must login with `APP_PASSWORD`.
+- Unmatched MacroDroid messages are captured for debugging and can be improved later.
