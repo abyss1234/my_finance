@@ -93,17 +93,6 @@ Required header:
 x-api-key: your-phone-api-key
 ```
 
-Example JSON body:
-
-```json
-{
-  "app": "TNG eWallet",
-  "title": "Transfer Successful.",
-  "text": "RM 0.10 has been successfully transferred to KATHERINE TIONG WEI NI.",
-  "time": "1782909512135"
-}
-```
-
 ## Vercel Deploy
 
 1. Push the project to GitHub.
