@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/note.txt
 
 # debug
 npm-debug.log*
@@ -41,5 +42,3 @@ dev-server*.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-/note.txt
