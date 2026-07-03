@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
@@ -21,7 +22,10 @@ type CapturedRequest = {
   savedTransactionId?: number;
 };
 
-const debugFile = path.join(process.cwd(), '.macrodroid-requests.json');
+const debugFile =
+  process.env.NODE_ENV === 'production'
+    ? path.join(tmpdir(), 'myfinance-macrodroid-requests.json')
+    : path.join(process.cwd(), '.macrodroid-requests.json');
 
 function headersToObject(headers: Headers) {
   const result: Record<string, string> = {};
@@ -71,7 +75,11 @@ async function readRequests() {
 }
 
 async function writeRequests(requests: CapturedRequest[]) {
-  await writeFile(debugFile, JSON.stringify(requests, null, 2), 'utf8');
+  try {
+    await writeFile(debugFile, JSON.stringify(requests, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to write MacroDroid debug capture:', error);
+  }
 }
 
 async function getUncategorizedCategoryId(type: 'INCOME' | 'EXPENSE') {
