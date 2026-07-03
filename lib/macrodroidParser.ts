@@ -50,6 +50,21 @@ function parseStructuredNotification(
 
   if (!app || !text) return null;
 
+  const maeScanPay = text.match(
+    /^Successful payment of RM\s*([\d,]+(?:\.\d{1,2})?)\s+to\s+(.+?)\.\s*REF:\s*([A-Z0-9]+)\.$/i
+  );
+
+  if (/^MAE$/i.test(app) && /Maybank2u:\s*Scan\s*&\s*Pay/i.test(title) && maeScanPay) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(maeScanPay[1]),
+      source: app,
+      counterparty: cleanName(maeScanPay[2]),
+      externalRef: maeScanPay[3].trim(),
+      date,
+    };
+  }
+
   const tngSent = text.match(
     /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been successfully transferred to\s+(.+?)\.$/i
   );
