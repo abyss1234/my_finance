@@ -65,6 +65,21 @@ function parseStructuredNotification(
     };
   }
 
+  const maeFundsReceived = text.match(
+    /^You['\u2019]ve just received RM\s*([\d,]+(?:\.\d{1,2})?)\s+in your account ending\s+(.+?)\.\s*REF:\s*([A-Z0-9]+)$/i
+  );
+
+  if (/^MAE$/i.test(app) && /Maybank2u:\s*Funds Received/i.test(title) && maeFundsReceived) {
+    return {
+      type: TransactionType.INCOME,
+      amount: parseAmount(maeFundsReceived[1]),
+      source: app,
+      counterparty: `Account ${cleanName(maeFundsReceived[2])}`,
+      externalRef: maeFundsReceived[3].trim(),
+      date,
+    };
+  }
+
   const tngSent = text.match(
     /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been successfully transferred to\s+(.+?)\.$/i
   );
