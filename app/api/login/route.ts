@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authCookieName, authCookieValue } from '@/lib/auth';
+import { authCookieName, createSessionCookieValue, sessionMaxAgeSeconds } from '@/lib/auth';
 
 type LoginBody = {
   password?: unknown;
@@ -17,12 +17,12 @@ export async function POST(req: Request) {
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(authCookieName, authCookieValue(), {
+  response.cookies.set(authCookieName, await createSessionCookieValue(), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: sessionMaxAgeSeconds,
   });
 
   return response;

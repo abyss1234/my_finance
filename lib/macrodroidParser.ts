@@ -80,6 +80,21 @@ function parseStructuredNotification(
     };
   }
 
+  const maeCardTransaction = text.match(
+    /^You['\u2019]ve just spent RM\s*([\d,]+(?:\.\d{1,2})?)\s+at\s+(.+?)\s+with your Maybank Debit Card Visa ending\s+(\d+)\.\s*View your receipt now\.$/i
+  );
+
+  if (/^MAE$/i.test(app) && /Maybank2u:\s*Card Transaction/i.test(title) && maeCardTransaction) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(maeCardTransaction[1]),
+      source: app,
+      counterparty: cleanName(maeCardTransaction[2]),
+      externalRef: `Card ending ${maeCardTransaction[3].trim()}`,
+      date,
+    };
+  }
+
   const tngSent = text.match(
     /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been successfully transferred to\s+(.+?)\.$/i
   );
@@ -90,6 +105,35 @@ function parseStructuredNotification(
       amount: parseAmount(tngSent[1]),
       source: app,
       counterparty: cleanName(tngSent[2]),
+      date,
+    };
+  }
+
+  const tngDuitNowPayment = text.match(
+    /^You have paid RM\s*([\d,]+(?:\.\d{1,2})?)\s+to\s+(.+?)\.$/i
+  );
+
+  if (/^TNG eWallet$/i.test(app) && /DuitNow Payment/i.test(title) && tngDuitNowPayment) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(tngDuitNowPayment[1]),
+      source: app,
+      counterparty: cleanName(tngDuitNowPayment[2]),
+      date,
+    };
+  }
+
+  const tngTollPayment = text.match(
+    /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+was deducted from your eWallet via\s+(.+?)\s+for toll payment on\s+(.+)$/i
+  );
+
+  if (/^TNG eWallet$/i.test(app) && /Successful Toll Payment/i.test(title) && tngTollPayment) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(tngTollPayment[1]),
+      source: app,
+      counterparty: `Toll - ${cleanName(tngTollPayment[2])}`,
+      externalRef: cleanName(tngTollPayment[3]),
       date,
     };
   }

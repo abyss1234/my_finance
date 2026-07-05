@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   authCookieName,
-  authCookieValue,
+  createSessionCookieValue,
   isAuthConfigured,
+  isValidSessionCookie,
   isValidMacroDroidKey,
+  sessionMaxAgeSeconds,
 } from '@/lib/auth';
 
 const publicPaths = ['/login', '/api/login', '/api/logout'];
@@ -12,13 +14,29 @@ function isPublicPath(pathname: string) {
   return publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
-export function proxy(req: NextRequest) {
+async function refreshSession(response: NextResponse) {
+  response.cookies.set(authCookieName, await createSessionCookieValue(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: sessionMaxAgeSeconds,
+  });
+
+  return response;
+}
+
+export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const session = req.cookies.get(authCookieName)?.value;
-  const isLoggedIn = isAuthConfigured() && session === authCookieValue();
+  const isLoggedIn = isAuthConfigured() && (await isValidSessionCookie(session));
 
   if (pathname === '/api/macrodroid' || pathname.startsWith('/api/macrodroid/')) {
-    if (isLoggedIn || isValidMacroDroidKey(req.headers.get('x-api-key'))) {
+    if (isLoggedIn) {
+      return refreshSession(NextResponse.next());
+    }
+
+    if (isValidMacroDroidKey(req.headers.get('x-api-key'))) {
       return NextResponse.next();
     }
 
@@ -30,7 +48,7 @@ export function proxy(req: NextRequest) {
   }
 
   if (isLoggedIn) {
-    return NextResponse.next();
+    return refreshSession(NextResponse.next());
   }
 
   if (pathname.startsWith('/api/')) {
