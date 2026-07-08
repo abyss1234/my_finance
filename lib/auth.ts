@@ -1,5 +1,8 @@
+import { sessionMaxAgeSeconds } from '@/lib/session';
+
+export { sessionMaxAgeSeconds };
+
 export const authCookieName = 'myfinance_auth';
-export const sessionMaxAgeSeconds = 15 * 60;
 
 export function isAuthConfigured() {
   return Boolean(process.env.APP_PASSWORD);

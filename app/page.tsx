@@ -5,12 +5,7 @@ import useSWR from 'swr';
 import SummaryCards from '@/components/SummaryCards';
 import TransactionForm from '@/components/TransactionForm';
 import TransactionList from '@/components/TransactionList';
-
-const fetcher = async <T,>(url: string): Promise<T> => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return (await response.json()) as T;
-};
+import { fetcher } from '@/lib/apiClient';
 
 export default function HomePage() {
   const { data, error, mutate } = useSWR<{ totals: { income: number; expense: number; net: number } }>(

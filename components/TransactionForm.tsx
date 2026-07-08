@@ -2,14 +2,9 @@
 
 import useSWR from 'swr';
 import { useState, useMemo } from 'react';
+import { authFetch, fetcher } from '@/lib/apiClient';
 
 type Category = { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
-
-const fetcher = async <T,>(url: string): Promise<T> => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return (await response.json()) as T;
-};
 
 export default function TransactionForm({ onCreated }: { onCreated?: () => void }) {
   const { data: categories, error: categoriesError } = useSWR<Category[]>('/api/categories', fetcher);
@@ -34,7 +29,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
         note: (formData.get('note') as string) || undefined,
         categoryId: Number(formData.get('categoryId')),
       };
-      const res = await fetch('/api/transactions', {
+      const res = await authFetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

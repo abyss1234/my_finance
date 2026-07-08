@@ -24,6 +24,7 @@ import {
   datePresetLabels,
   rangeForPreset,
 } from '@/lib/finance';
+import { fetcher } from '@/lib/apiClient';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, TimeScale);
 
@@ -33,12 +34,6 @@ type AnalysisResponse = {
   byCategory: { categoryId: number; name: string; kind: 'INCOME' | 'EXPENSE'; amount: number }[];
   byDay: { date: string; income: number; expense: number; net: number }[];
   totals: { income: number; expense: number; net: number };
-};
-
-const fetcher = async <T,>(url: string): Promise<T> => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return (await response.json()) as T;
 };
 
 export default function AnalysisPage() {

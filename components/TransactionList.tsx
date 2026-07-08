@@ -3,6 +3,7 @@
 import useSWR from 'swr';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { formatCurrency } from '@/lib/finance';
+import { authFetch, fetcher } from '@/lib/apiClient';
 
 type Category = { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
 
@@ -35,12 +36,6 @@ type EditForm = {
   counterparty: string;
   externalRef: string;
   rawBody: string;
-};
-
-const fetcher = async <T,>(url: string): Promise<T> => {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return (await response.json()) as T;
 };
 
 function toDateInputValue(value: string) {
@@ -96,7 +91,7 @@ export default function TransactionList({
     const ok = confirm('Delete this transaction?');
     if (!ok) return;
 
-    const response = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+    const response = await authFetch(`/api/transactions/${id}`, { method: 'DELETE' });
     if (response.ok) {
       await mutate();
       onChanged?.();
@@ -117,7 +112,7 @@ export default function TransactionList({
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/transactions/${editForm.id}`, {
+      const response = await authFetch(`/api/transactions/${editForm.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

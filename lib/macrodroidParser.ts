@@ -123,6 +123,20 @@ function parseStructuredNotification(
     };
   }
 
+  const tngPayment = text.match(
+    /^You have paid RM\s*([\d,]+(?:\.\d{1,2})?)\s+for\s+(.+?)\.$/i
+  );
+
+  if (/^TNG eWallet$/i.test(app) && /^Payment$/i.test(title) && tngPayment) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(tngPayment[1]),
+      source: app,
+      counterparty: cleanName(tngPayment[2]),
+      date,
+    };
+  }
+
   const tngTollPayment = text.match(
     /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+was deducted from your eWallet via\s+(.+?)\s+for toll payment on\s+(.+)$/i
   );
