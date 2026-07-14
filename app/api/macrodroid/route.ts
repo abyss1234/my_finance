@@ -1,39 +1,9 @@
 import { NextResponse } from 'next/server';
-import { readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { parseMacroDroidNotification } from '@/lib/macrodroidParser';
 
 export const runtime = 'nodejs';
-
-type CapturedRequest = {
-  id: number;
-  receivedAt: string;
-  method: string;
-  url: string;
-  contentType: string | null;
-  headers: Record<string, string>;
-  query: Record<string, string>;
-  rawBody: string;
-  parsedBody: unknown;
-  parseMode: 'json' | 'form' | 'text' | 'empty';
-  savedTransactionId?: number;
-};
-
-const debugFile =
-  process.env.NODE_ENV === 'production'
-    ? path.join(tmpdir(), 'myfinance-macrodroid-requests.json')
-    : path.join(process.cwd(), '.macrodroid-requests.json');
-
-function headersToObject(headers: Headers) {
-  const result: Record<string, string> = {};
-  headers.forEach((value, key) => {
-    result[key] = value;
-  });
-  return result;
-}
 
 function searchParamsToObject(searchParams: URLSearchParams) {
   const result: Record<string, string> = {};
@@ -45,41 +15,46 @@ function searchParamsToObject(searchParams: URLSearchParams) {
 
 function parseBody(rawBody: string, contentType: string | null) {
   if (!rawBody) {
-    return { parsedBody: null, parseMode: 'empty' as const };
+    return null;
   }
 
   try {
-    return { parsedBody: JSON.parse(rawBody), parseMode: 'json' as const };
+    return JSON.parse(rawBody) as unknown;
   } catch {
-    // MacroDroid may send JSON, form data, or plain text depending on the action setup.
+    // MacroDroid may send form data or plain text depending on the action setup.
   }
 
   if (contentType?.includes('application/x-www-form-urlencoded')) {
+    return searchParamsToObject(new URLSearchParams(rawBody));
+  }
+
+  return rawBody;
+}
+
+function optionalString(value: unknown) {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number') return String(value);
+  return null;
+}
+
+function getReceiptData(rawBody: string, parsedBody: unknown) {
+  if (parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)) {
+    const body = parsedBody as Record<string, unknown>;
+
     return {
-      parsedBody: searchParamsToObject(new URLSearchParams(rawBody)),
-      parseMode: 'form' as const,
+      app: optionalString(body.app),
+      title: optionalString(body.title),
+      text: optionalString(body.text) ?? rawBody,
+      phoneTime: optionalString(body.time),
     };
   }
 
-  return { parsedBody: rawBody, parseMode: 'text' as const };
-}
-
-async function readRequests() {
-  try {
-    const file = await readFile(debugFile, 'utf8');
-    const requests = JSON.parse(file) as CapturedRequest[];
-    return Array.isArray(requests) ? requests : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeRequests(requests: CapturedRequest[]) {
-  try {
-    await writeFile(debugFile, JSON.stringify(requests, null, 2), 'utf8');
-  } catch (error) {
-    console.warn('Failed to write MacroDroid debug capture:', error);
-  }
+  return {
+    app: null,
+    title: null,
+    text: typeof parsedBody === 'string' ? parsedBody : rawBody,
+    phoneTime: null,
+  };
 }
 
 async function getUncategorizedCategoryId(type: 'INCOME' | 'EXPENSE') {
@@ -93,24 +68,15 @@ async function getUncategorizedCategoryId(type: 'INCOME' | 'EXPENSE') {
   return category.id;
 }
 
-export async function GET() {
-  const requests = await readRequests();
-
-  return NextResponse.json({
-    ok: true,
-    message: 'MacroDroid debug receiver is ready. Send POST requests here and refresh this URL to view them.',
-    receivedCount: requests.length,
-    latest: requests[0] ?? null,
-    requests,
-  });
-}
-
 export async function POST(req: Request) {
-  const requests = await readRequests();
-  const url = new URL(req.url);
   const contentType = req.headers.get('content-type');
   const rawBody = await req.text();
-  const { parsedBody, parseMode } = parseBody(rawBody, contentType);
+  const parsedBody = parseBody(rawBody, contentType);
+
+  const receipt = await prisma.macroDroidReceipt.create({
+    data: getReceiptData(rawBody, parsedBody),
+  });
+
   const parsedNotification = parseMacroDroidNotification(rawBody, parsedBody);
   let savedTransaction = null;
 
@@ -133,33 +99,20 @@ export async function POST(req: Request) {
     });
   }
 
-  const captured: CapturedRequest = {
-    id: (requests[0]?.id ?? 0) + 1,
-    receivedAt: new Date().toISOString(),
-    method: req.method,
-    url: req.url,
-    contentType,
-    headers: headersToObject(req.headers),
-    query: searchParamsToObject(url.searchParams),
-    rawBody,
-    parsedBody,
-    parseMode,
-    savedTransactionId: savedTransaction?.id,
-  };
-
-  requests.unshift(captured);
-  requests.splice(10);
-  await writeRequests(requests);
-
-  console.log('Captured MacroDroid request:', captured);
+  console.log('MacroDroid request received:', {
+    receiptId: receipt.id,
+    receivedAt: receipt.receivedAt,
+    app: receipt.app,
+    title: receipt.title,
+  });
 
   return NextResponse.json({
-    ok: true,
+    received: true,
+    receipt,
     message: savedTransaction
-      ? 'MacroDroid request captured and transaction saved'
-      : 'MacroDroid request captured but no known transaction format matched',
+      ? 'MacroDroid request received and transaction saved'
+      : 'MacroDroid request received but no known transaction format matched',
     parsedNotification,
     savedTransaction,
-    captured,
   });
 }

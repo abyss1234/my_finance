@@ -41,3 +41,14 @@ model Transaction {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
+
+model MacroDroidReceipt {
+  id         Int      @id @default(autoincrement())
+  receivedAt DateTime @default(now())
+  app        String?
+  title      String?
+  text       String
+  phoneTime  String?
+
+  @@index([receivedAt])
+}

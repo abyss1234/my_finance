@@ -93,6 +93,8 @@ Required header:
 x-api-key: your-phone-api-key
 ```
 
+Received requests are shown on the protected **Phone Receipts** page.
+
 ## Vercel Deploy
 
 1. Push the project to GitHub.
@@ -127,4 +129,4 @@ npm run lint
 - Do not commit `.env`.
 - MacroDroid must send `x-api-key`.
 - Web users must login with `APP_PASSWORD`.
-- Unmatched MacroDroid messages are captured for debugging and can be improved later.
+- MacroDroid receipts are stored even when the transaction format is not recognized.
