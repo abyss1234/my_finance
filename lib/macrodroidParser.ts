@@ -95,6 +95,80 @@ function parseStructuredNotification(
     };
   }
 
+  const maeM2uPaid = text.match(
+    /^M2U:\s*You have successfully paid RM\s*([\d,]+(?:\.\d{1,2})?)\s+to\s+(.+?)\s+on\s+(.+?)\.Call\s+.+$/i
+  );
+
+  if (/^MAE$/i.test(app) && /Maybank2u:\s*Scan\s*&\s*Pay/i.test(title) && maeM2uPaid) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(maeM2uPaid[1]),
+      source: app,
+      counterparty: cleanName(maeM2uPaid[2]),
+      externalRef: cleanName(maeM2uPaid[3]),
+      date,
+    };
+  }
+
+  const cimbDebitCard = text.match(
+    /^CIMB:\s*RM\s*([\d,]+(?:\.\d{1,2})?)\s+was charged to your Debit Card on\s+(.+?)\s+at\s+(.+?)\.\s*Pls call.+$/i
+  );
+
+  if (/^CIMB OCTO MY$/i.test(app) && cimbDebitCard) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(cimbDebitCard[1]),
+      source: app,
+      counterparty: cleanName(cimbDebitCard[3]),
+      externalRef: cleanName(cimbDebitCard[2]),
+      date,
+    };
+  }
+
+  const tngIncoming = text.match(
+    /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+received from\s+(.+?)\s+for\s+(.+?)\.$/i
+  );
+
+  if (/^TNG eWallet$/i.test(app) && /Incoming Money/i.test(title) && tngIncoming) {
+    return {
+      type: TransactionType.INCOME,
+      amount: parseAmount(tngIncoming[1]),
+      source: app,
+      counterparty: cleanName(tngIncoming[2]),
+      externalRef: cleanName(tngIncoming[3]),
+      date,
+    };
+  }
+
+  const tngWalletReload = text.match(
+    /^Your money is in!\s*RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been reloaded to your Touch 'n Go eWallet balance\.\s*Reference No\.\s*(.+)$/i
+  );
+
+  if (/^TNG eWallet$/i.test(app) && /Reload Successful/i.test(title) && tngWalletReload) {
+    return {
+      type: TransactionType.INCOME,
+      amount: parseAmount(tngWalletReload[1]),
+      source: app,
+      counterparty: "Touch 'n Go eWallet Reload",
+      externalRef: cleanName(tngWalletReload[2]),
+      date,
+    };
+  }
+
+  const tngCardReload = text.match(
+    /^.+?successfully reloaded RM\s*([\d,]+(?:\.\d{1,2})?)\s+into Touch 'n Go Card\.\s*View more details now!$/i
+  );
+
+  if (/^TNG eWallet$/i.test(app) && /Reload successful/i.test(title) && tngCardReload) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(tngCardReload[1]),
+      source: app,
+      counterparty: "Touch 'n Go Card Reload",
+      date,
+    };
+  }
+
   const tngSent = text.match(
     /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been successfully transferred to\s+(.+?)\.$/i
   );
