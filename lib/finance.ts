@@ -11,6 +11,28 @@ import {
 export type TransactionType = 'INCOME' | 'EXPENSE';
 export type DatePreset = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_WEEK' | 'TODAY' | 'ALL' | 'CUSTOM';
 
+const malaysiaTimeZone = 'Asia/Kuala_Lumpur';
+const malaysiaOffsetMs = 8 * 60 * 60 * 1000;
+const malaysiaDateTimeFormatter = new Intl.DateTimeFormat('en-MY', {
+  timeZone: malaysiaTimeZone,
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+const malaysiaDateFormatter = new Intl.DateTimeFormat('en-MY', {
+  timeZone: malaysiaTimeZone,
+  dateStyle: 'medium',
+});
+const malaysiaTimeFormatter = new Intl.DateTimeFormat('en-MY', {
+  timeZone: malaysiaTimeZone,
+  timeStyle: 'short',
+});
+const malaysiaDatePartsFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: malaysiaTimeZone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 export const datePresetLabels: Record<DatePreset, string> = {
   THIS_MONTH: 'This Month',
   LAST_MONTH: 'Last Month',
@@ -28,8 +50,48 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
+export function formatMalaysiaDateTime(value: string | number | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : malaysiaDateTimeFormatter.format(date);
+}
+
+export function formatMalaysiaDate(value: string | number | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : malaysiaDateFormatter.format(date);
+}
+
+export function formatMalaysiaTime(value: string | number | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : malaysiaTimeFormatter.format(date);
+}
+
+export function malaysiaDateKey(value: string | number | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const parts = malaysiaDatePartsFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  return year && month && day ? `${year}-${month}-${day}` : '';
+}
+
 export function dateInputValue(date: Date | null) {
-  return date ? date.toISOString().slice(0, 10) : '';
+  return date ? malaysiaDateKey(date) : '';
+}
+
+export function dateTimeInputValue(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return new Date(date.getTime() + malaysiaOffsetMs).toISOString().slice(0, 16);
+}
+
+export function dateTimeInputToIso(value: string) {
+  const malaysiaWallTime = new Date(`${value}Z`);
+  if (Number.isNaN(malaysiaWallTime.getTime())) return '';
+
+  return new Date(malaysiaWallTime.getTime() - malaysiaOffsetMs).toISOString();
 }
 
 export function rangeForPreset(preset: Exclude<DatePreset, 'CUSTOM'>) {
@@ -60,8 +122,8 @@ export function dateInputToIso(value: string, boundary: 'start' | 'end') {
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return '';
 
-  const date = new Date(year, month - 1, day);
-  if (boundary === 'end') date.setHours(23, 59, 59, 999);
+  let timestamp = Date.UTC(year, month - 1, day) - malaysiaOffsetMs;
+  if (boundary === 'end') timestamp += 24 * 60 * 60 * 1000 - 1;
 
-  return date.toISOString();
+  return new Date(timestamp).toISOString();
 }

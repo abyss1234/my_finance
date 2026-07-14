@@ -2,7 +2,13 @@
 
 import useSWR from 'swr';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { formatCurrency } from '@/lib/finance';
+import {
+  dateTimeInputToIso,
+  dateTimeInputValue,
+  formatCurrency,
+  formatMalaysiaDate,
+  formatMalaysiaTime,
+} from '@/lib/finance';
 import { authFetch, fetcher } from '@/lib/apiClient';
 
 type Category = { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
@@ -38,20 +44,12 @@ type EditForm = {
   rawBody: string;
 };
 
-function toDateInputValue(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 10);
-}
-
 function toEditForm(transaction: Tx): EditForm {
   return {
     id: transaction.id,
     type: transaction.type,
     amount: String(transaction.amount),
-    date: toDateInputValue(transaction.date),
+    date: transaction.date,
     categoryId: String(transaction.category.id),
     note: transaction.note ?? '',
     source: transaction.source ?? '',
@@ -173,7 +171,12 @@ export default function TransactionList({
           <tbody>
             {items.map((transaction) => (
               <tr key={transaction.id} className="border-t">
-                <td className="px-4 py-2">{new Date(transaction.date).toLocaleDateString()}</td>
+                <td className="whitespace-nowrap px-4 py-2">
+                  <div>{formatMalaysiaDate(transaction.date)}</div>
+                  <div className="text-xs text-zinc-500">
+                    {formatMalaysiaTime(transaction.date)}
+                  </div>
+                </td>
                 <td className="px-4 py-2">{transaction.type}</td>
                 <td className="px-4 py-2">{transaction.category.name}</td>
                 <td className="px-4 py-2">{transaction.source ?? ''}</td>
@@ -267,13 +270,15 @@ export default function TransactionList({
               </div>
 
               <div>
-                <label className="label">Date</label>
+                <label className="label">Date and time</label>
                 <input
                   className="input"
-                  type="date"
+                  type="datetime-local"
                   required
-                  value={editForm.date}
-                  onChange={(event) => setEditForm({ ...editForm, date: event.target.value })}
+                  value={dateTimeInputValue(editForm.date)}
+                  onChange={(event) =>
+                    setEditForm({ ...editForm, date: dateTimeInputToIso(event.target.value) })
+                  }
                 />
               </div>
 

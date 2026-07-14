@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { malaysiaDateKey } from "@/lib/finance";
 import { Prisma, TransactionType } from "@prisma/client";
 
 function toDayKey(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return malaysiaDateKey(d);
 }
 
 type DayAgg = { date: string; income: number; expense: number; net: number };

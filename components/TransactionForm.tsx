@@ -3,6 +3,7 @@
 import useSWR from 'swr';
 import { useState, useMemo } from 'react';
 import { authFetch, fetcher } from '@/lib/apiClient';
+import { dateTimeInputToIso } from '@/lib/finance';
 
 type Category = { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
 
@@ -22,10 +23,11 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
     setIsSaving(true);
 
     try {
+      const date = formData.get('date');
       const payload = {
         type,
         amount: Number(formData.get('amount')),
-        date: formData.get('date') || undefined,
+        date: typeof date === 'string' && date ? dateTimeInputToIso(date) : undefined,
         note: (formData.get('note') as string) || undefined,
         categoryId: Number(formData.get('categoryId')),
       };
@@ -74,8 +76,8 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           <input name="amount" type="number" step="0.01" min="0" required className="input" placeholder="0.00" />
         </div>
         <div className="sm:col-span-1">
-          <label className="label">Date</label>
-          <input name="date" type="date" className="input" />
+          <label className="label">Date and time</label>
+          <input name="date" type="datetime-local" className="input" />
         </div>
         <div className="sm:col-span-1">
           <label className="label">Category</label>

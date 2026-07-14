@@ -59,7 +59,7 @@ export async function GET(req: Request) {
     const [items, totals, totalCount] = await Promise.all([
       prisma.transaction.findMany({
         where,
-        orderBy: { date: 'desc' },
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
         include: { category: true },
         skip: (page - 1) * pageSize,
         take: pageSize,

@@ -2,6 +2,11 @@
 
 import useSWR from 'swr';
 import { fetcher } from '@/lib/apiClient';
+import {
+  formatMalaysiaDate,
+  formatMalaysiaDateTime,
+  formatMalaysiaTime,
+} from '@/lib/finance';
 
 type MacroDroidReceipt = {
   id: number;
@@ -12,13 +17,6 @@ type MacroDroidReceipt = {
   phoneTime: string | null;
 };
 
-function formatReceivedAt(value: string) {
-  return new Date(value).toLocaleString('en-MY', {
-    dateStyle: 'medium',
-    timeStyle: 'medium',
-  });
-}
-
 export default function ReceiptsPage() {
   const { data: receipts, error, isLoading, isValidating, mutate } =
     useSWR<MacroDroidReceipt[]>('/api/receipts', fetcher);
@@ -27,7 +25,7 @@ export default function ReceiptsPage() {
     <main className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Phone Receipts</h2>
+          <h2 className="text-lg font-semibold text-zinc-900">Macro Logs</h2>
           <p className="text-sm text-zinc-600">
             The latest requests received from MacroDroid.
           </p>
@@ -58,15 +56,21 @@ export default function ReceiptsPage() {
                     {receipt.title ?? 'No title'}
                   </div>
                 </div>
-                <time className="shrink-0 text-xs text-zinc-500" dateTime={receipt.receivedAt}>
-                  {formatReceivedAt(receipt.receivedAt)}
+                <time
+                  className="shrink-0 text-xs text-zinc-500 sm:text-right"
+                  dateTime={receipt.receivedAt}
+                >
+                  <span className="block">{formatMalaysiaDate(receipt.receivedAt)}</span>
+                  <span className="block">{formatMalaysiaTime(receipt.receivedAt)}</span>
                 </time>
               </div>
               <p className="whitespace-pre-wrap wrap-break-word text-sm text-zinc-800">
                 {receipt.text || '(No text)'}
               </p>
               {receipt.phoneTime && (
-                <div className="text-xs text-zinc-500">Phone time: {receipt.phoneTime}</div>
+                <div className="text-xs text-zinc-500">
+                  Phone time: {formatMalaysiaDateTime(Number(receipt.phoneTime))}
+                </div>
               )}
             </article>
           ))}
