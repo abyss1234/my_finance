@@ -12,7 +12,9 @@ import { useFinanceFilters } from '@/hooks/useFinanceFilters';
 import { useTransactionEditor } from '@/hooks/useTransactionEditor';
 import { fetcher } from '@/lib/apiClient';
 import { dateInputToIso } from '@/lib/finance';
-import type { CategoryOption, TransactionRow } from '@/lib/transactionTypes';
+import type { CategoryOption, TransactionKind, TransactionRow } from '@/lib/transactionTypes';
+
+const PAGE_SIZE = 15;
 
 type ApiData = {
   items: TransactionRow[];
@@ -24,7 +26,8 @@ type ApiData = {
 
 export default function TransactionsPage() {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<10 | 20 | 50>(10);
+  const [transactionType, setTransactionType] = useState<'' | TransactionKind>('');
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const filters = useFinanceFilters(() => setPage(1));
 
   const { data: categories } = useSWR<CategoryOption[]>('/api/categories', fetcher);
@@ -36,12 +39,13 @@ export default function TransactionsPage() {
 
     if (fromIso) params.set('from', fromIso);
     if (toIso) params.set('to', toIso);
-    if (filters.categoryId) params.set('categoryId', filters.categoryId);
+    if (transactionType) params.set('type', transactionType);
+    categoryIds.forEach((categoryId) => params.append('categoryId', categoryId));
     params.set('page', String(page));
-    params.set('pageSize', String(pageSize));
+    params.set('pageSize', String(PAGE_SIZE));
 
     return `/api/transactions?${params.toString()}`;
-  }, [filters.from, filters.to, filters.categoryId, page, pageSize]);
+  }, [filters.from, filters.to, transactionType, categoryIds, page]);
 
   const { data, error, isLoading, mutate } = useSWR<ApiData>(query, fetcher, {
     revalidateOnFocus: false,
@@ -61,7 +65,7 @@ export default function TransactionsPage() {
     <main className="min-w-0 space-y-5">
       <PageHeader
         title="Transactions"
-        description="Review income and expenses by date, category, and page size."
+        description="Review income and expenses by date, type, and category."
       />
 
       <SummaryCards
@@ -71,18 +75,23 @@ export default function TransactionsPage() {
       />
 
       <FinanceFilters
+        mode="transactions"
         categories={categories ?? []}
         preset={filters.preset}
         from={filters.from}
         to={filters.to}
-        categoryId={filters.categoryId}
-        pageSize={pageSize}
+        transactionType={transactionType}
+        categoryIds={categoryIds}
         onPresetChange={filters.setPreset}
         onFromChange={filters.setFrom}
         onToChange={filters.setTo}
-        onCategoryChange={filters.setCategoryId}
-        onPageSizeChange={(value) => {
-          setPageSize(value);
+        onTransactionTypeChange={(value) => {
+          setTransactionType(value);
+          setCategoryIds([]);
+          setPage(1);
+        }}
+        onCategoryIdsChange={(ids) => {
+          setCategoryIds(ids);
           setPage(1);
         }}
       />

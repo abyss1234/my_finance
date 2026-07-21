@@ -2,38 +2,43 @@
 
 import { useId } from 'react';
 import { ListFilter } from 'lucide-react';
+import CategoryMultiSelect from '@/components/CategoryMultiSelect';
 import { DatePreset, datePresetLabels } from '@/lib/finance';
-import type { CategoryOption } from '@/lib/transactionTypes';
+import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
 
-type Props = {
+type CommonProps = {
   categories: CategoryOption[];
   preset: DatePreset;
   from: string;
   to: string;
-  categoryId: string;
   onPresetChange: (value: DatePreset) => void;
   onFromChange: (value: string) => void;
   onToChange: (value: string) => void;
-  onCategoryChange: (value: string) => void;
-  pageSize?: 10 | 20 | 50;
-  onPageSizeChange?: (value: 10 | 20 | 50) => void;
 };
 
-export default function FinanceFilters({
-  categories,
-  preset,
-  from,
-  to,
-  categoryId,
-  onPresetChange,
-  onFromChange,
-  onToChange,
-  onCategoryChange,
-  pageSize,
-  onPageSizeChange,
-}: Props) {
+type SingleCategoryProps = {
+  mode?: 'single';
+  categoryId: string;
+  onCategoryChange: (value: string) => void;
+};
+
+type TransactionCategoryProps = {
+  mode: 'transactions';
+  transactionType: '' | TransactionKind;
+  categoryIds: string[];
+  onTransactionTypeChange: (value: '' | TransactionKind) => void;
+  onCategoryIdsChange: (ids: string[]) => void;
+};
+
+type Props = CommonProps & (SingleCategoryProps | TransactionCategoryProps);
+
+export default function FinanceFilters(props: Props) {
   const id = useId();
-  const hasPageSize = pageSize !== undefined && onPageSizeChange !== undefined;
+  const { categories, preset, from, to, onPresetChange, onFromChange, onToChange } = props;
+  const isTransactionFilter = props.mode === 'transactions';
+  const visibleCategories = isTransactionFilter
+    ? categories.filter((category) => category.kind === props.transactionType)
+    : categories;
 
   return (
     <section className="card p-4" aria-labelledby={`${id}-title`}>
@@ -89,39 +94,58 @@ export default function FinanceFilters({
           />
         </div>
 
-        <div className={hasPageSize ? 'lg:col-span-3' : 'lg:col-span-5'}>
-          <label className="label" htmlFor={`${id}-category`}>
-            Category
-          </label>
-          <select
-            id={`${id}-category`}
-            className="select"
-            value={categoryId}
-            onChange={(event) => onCategoryChange(event.target.value)}
-          >
-            <option value="">All Categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={String(category.id)}>
-                {category.name} ({category.kind})
-              </option>
-            ))}
-          </select>
-        </div>
+        {isTransactionFilter ? (
+          <>
+            <div className="lg:col-span-2">
+              <label className="label" htmlFor={`${id}-type`}>
+                Type
+              </label>
+              <select
+                id={`${id}-type`}
+                className="select"
+                value={props.transactionType}
+                onChange={(event) =>
+                  props.onTransactionTypeChange(event.target.value as '' | TransactionKind)
+                }
+              >
+                <option value="">All Types</option>
+                <option value="INCOME">Income</option>
+                <option value="EXPENSE">Expense</option>
+              </select>
+            </div>
 
-        {hasPageSize && (
-          <div className="lg:col-span-2">
-            <label className="label" htmlFor={`${id}-rows`}>
-              Rows
+            <div className="lg:col-span-3">
+              <label className="label" htmlFor={`${id}-category`}>
+                Category
+              </label>
+              <CategoryMultiSelect
+                key={props.transactionType || 'all'}
+                id={`${id}-category`}
+                categories={visibleCategories}
+                selectedIds={props.categoryIds}
+                transactionType={props.transactionType}
+                disabled={!props.transactionType}
+                onChange={props.onCategoryIdsChange}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="lg:col-span-5">
+            <label className="label" htmlFor={`${id}-category`}>
+              Category
             </label>
             <select
-              id={`${id}-rows`}
+              id={`${id}-category`}
               className="select"
-              value={pageSize}
-              onChange={(event) => onPageSizeChange?.(Number(event.target.value) as 10 | 20 | 50)}
+              value={props.categoryId}
+              onChange={(event) => props.onCategoryChange(event.target.value)}
             >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
+              <option value="">All Categories</option>
+              {visibleCategories.map((category) => (
+                <option key={category.id} value={String(category.id)}>
+                  {category.name} ({category.kind})
+                </option>
+              ))}
             </select>
           </div>
         )}

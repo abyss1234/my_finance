@@ -27,23 +27,19 @@ export async function GET(req: Request) {
     const type = parseTransactionType(searchParams.get('type'));
     const from = parseDate(searchParams.get('from'));
     const to = parseDate(searchParams.get('to'));
-    const rawCategoryId = searchParams.get('categoryId');
-    let categoryId: number | undefined;
+    const rawCategoryIds = searchParams.getAll('categoryId').filter(Boolean);
     const requestedPage = Number(searchParams.get('page') || '1');
     const requestedPageSize = Number(searchParams.get('pageSize') || '10');
     const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
-    const pageSize = [10, 20, 50].includes(requestedPageSize) ? requestedPageSize : 10;
+    const pageSize = [10, 15, 20, 50].includes(requestedPageSize) ? requestedPageSize : 10;
 
     if (from === undefined || to === undefined) {
       return NextResponse.json({ error: 'Invalid date range' }, { status: 400 });
     }
 
-    if (rawCategoryId) {
-      const parsedCategoryId = Number(rawCategoryId);
-      if (!Number.isInteger(parsedCategoryId) || parsedCategoryId < 1) {
-        return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-      }
-      categoryId = parsedCategoryId;
+    const categoryIds = rawCategoryIds.map(Number);
+    if (categoryIds.some((categoryId) => !Number.isInteger(categoryId) || categoryId < 1)) {
+      return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
     }
 
     const where: Prisma.TransactionWhereInput = {};
@@ -54,7 +50,7 @@ export async function GET(req: Request) {
       if (to) date.lte = to;
       where.date = date;
     }
-    if (categoryId !== undefined) where.categoryId = categoryId;
+    if (categoryIds.length > 0) where.categoryId = { in: [...new Set(categoryIds)] };
 
     const [items, totals, totalCount] = await Promise.all([
       prisma.transaction.findMany({
