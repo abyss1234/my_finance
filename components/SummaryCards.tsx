@@ -1,4 +1,6 @@
 import { formatCurrency } from '@/lib/finance';
+import { ArrowDownRight, ArrowUpRight, Scale } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 type Props = { income: number; expense: number; net: number };
 
@@ -6,6 +8,7 @@ type SummaryItemProps = {
   title: string;
   value: number;
   tone: 'income' | 'expense' | 'net';
+  icon: LucideIcon;
 };
 
 const toneClasses: Record<SummaryItemProps['tone'], string> = {
@@ -14,21 +17,26 @@ const toneClasses: Record<SummaryItemProps['tone'], string> = {
   net: 'border-indigo-200 bg-indigo-50/70 text-indigo-700',
 };
 
-function SummaryItem({ title, value, tone }: SummaryItemProps) {
+function SummaryItem({ title, value, tone, icon: Icon }: SummaryItemProps) {
   return (
-    <div className={`card p-4 ${toneClasses[tone]}`}>
-      <div className="text-xs font-semibold uppercase tracking-wide opacity-75">{title}</div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight">{formatCurrency(value)}</div>
+    <div className={`card min-w-0 p-4 ${toneClasses[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-semibold uppercase opacity-75">{title}</div>
+        <Icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+      </div>
+      <div className="mt-2 truncate text-xl font-semibold tabular-nums sm:text-2xl" title={formatCurrency(value)}>
+        {formatCurrency(value)}
+      </div>
     </div>
   );
 }
 
 export default function SummaryCards({ income, expense, net }: Props) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <SummaryItem title="Income" value={income} tone="income" />
-      <SummaryItem title="Expense" value={expense} tone="expense" />
-      <SummaryItem title="Net" value={net} tone="net" />
+    <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-3">
+      <SummaryItem title="Income" value={income} tone="income" icon={ArrowUpRight} />
+      <SummaryItem title="Expense" value={expense} tone="expense" icon={ArrowDownRight} />
+      <SummaryItem title="Net" value={net} tone="net" icon={Scale} />
     </div>
   );
 }

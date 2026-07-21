@@ -1,112 +1,55 @@
 'use client';
 
 import useSWR from 'swr';
-import { FormEvent, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import FinanceFilters from '@/components/FinanceFilters';
+import PageHeader from '@/components/PageHeader';
 import SummaryCards from '@/components/SummaryCards';
-import {
-  DatePreset,
-  dateInputToIso,
-  dateInputValue,
-  dateTimeInputToIso,
-  dateTimeInputValue,
-  datePresetLabels,
-  formatCurrency,
-  formatMalaysiaDate,
-  formatMalaysiaTime,
-  rangeForPreset,
-} from '@/lib/finance';
-import { authFetch, fetcher } from '@/lib/apiClient';
-
-type Category = { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
-
-type Tx = {
-  id: number;
-  type: 'INCOME' | 'EXPENSE';
-  amount: string;
-  date: string;
-  note?: string | null;
-  source?: string | null;
-  counterparty?: string | null;
-  externalRef?: string | null;
-  rawBody?: string | null;
-  category: { id: number; name: string; kind: 'INCOME' | 'EXPENSE' };
-};
-
-type EditForm = {
-  id: number;
-  type: 'INCOME' | 'EXPENSE';
-  amount: string;
-  date: string;
-  categoryId: string;
-  note: string;
-  source: string;
-  counterparty: string;
-  externalRef: string;
-  rawBody: string;
-};
+import TransactionEditDialog from '@/components/TransactionEditDialog';
+import TransactionTable from '@/components/TransactionTable';
+import { useFinanceFilters } from '@/hooks/useFinanceFilters';
+import { useTransactionEditor } from '@/hooks/useTransactionEditor';
+import { fetcher } from '@/lib/apiClient';
+import { dateInputToIso } from '@/lib/finance';
+import type { CategoryOption, TransactionRow } from '@/lib/transactionTypes';
 
 type ApiData = {
-  items: Tx[];
+  items: TransactionRow[];
   totals: { income: number; expense: number; net: number };
   page: number;
   pageSize: number;
   totalCount: number;
 };
 
-function toEditForm(transaction: Tx): EditForm {
-  return {
-    id: transaction.id,
-    type: transaction.type,
-    amount: String(transaction.amount),
-    date: transaction.date,
-    categoryId: String(transaction.category.id),
-    note: transaction.note ?? '',
-    source: transaction.source ?? '',
-    counterparty: transaction.counterparty ?? '',
-    externalRef: transaction.externalRef ?? '',
-    rawBody: transaction.rawBody ?? '',
-  };
-}
-
 export default function TransactionsPage() {
-  const [preset, setPreset] = useState<DatePreset>('THIS_MONTH');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [categoryId, setCategoryId] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<10 | 20 | 50>(10);
-  const [editForm, setEditForm] = useState<EditForm | null>(null);
-  const [editError, setEditError] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const filters = useFinanceFilters(() => setPage(1));
 
-  const { data: categories } = useSWR<Category[]>('/api/categories', fetcher);
-
-  const { from, to } = useMemo(() => {
-    if (preset === 'CUSTOM') return { from: customFrom, to: customTo };
-
-    const range = rangeForPreset(preset);
-    return {
-      from: dateInputValue(range.from),
-      to: dateInputValue(range.to),
-    };
-  }, [preset, customFrom, customTo]);
+  const { data: categories } = useSWR<CategoryOption[]>('/api/categories', fetcher);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
-    const fromIso = dateInputToIso(from, 'start');
-    const toIso = dateInputToIso(to, 'end');
+    const fromIso = dateInputToIso(filters.from, 'start');
+    const toIso = dateInputToIso(filters.to, 'end');
 
     if (fromIso) params.set('from', fromIso);
     if (toIso) params.set('to', toIso);
-    if (categoryId) params.set('categoryId', categoryId);
+    if (filters.categoryId) params.set('categoryId', filters.categoryId);
     params.set('page', String(page));
     params.set('pageSize', String(pageSize));
 
     return `/api/transactions?${params.toString()}`;
-  }, [from, to, categoryId, page, pageSize]);
+  }, [filters.from, filters.to, filters.categoryId, page, pageSize]);
 
   const { data, error, isLoading, mutate } = useSWR<ApiData>(query, fetcher, {
     revalidateOnFocus: false,
+  });
+  const editor = useTransactionEditor({
+    afterChange: async () => {
+      await mutate();
+    },
   });
 
   const totalPages = useMemo(
@@ -114,73 +57,12 @@ export default function TransactionsPage() {
     [data]
   );
 
-  const categoryOptions = useMemo(
-    () => (categories ?? []).filter((category) => category.kind === editForm?.type),
-    [categories, editForm?.type]
-  );
-
-  async function remove(id: number) {
-    const ok = confirm('Delete this transaction?');
-    if (!ok) return;
-
-    const response = await authFetch(`/api/transactions/${id}`, { method: 'DELETE' });
-    if (response.ok) {
-      await mutate();
-      return;
-    }
-
-    alert('Failed to delete');
-  }
-
-  async function saveEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editForm) return;
-
-    const ok = confirm('Save changes to this transaction?');
-    if (!ok) return;
-
-    setEditError('');
-    setIsSaving(true);
-
-    try {
-      const response = await authFetch(`/api/transactions/${editForm.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: editForm.type,
-          amount: Number(editForm.amount),
-          date: editForm.date,
-          categoryId: Number(editForm.categoryId),
-          note: editForm.note,
-          source: editForm.source,
-          counterparty: editForm.counterparty,
-          externalRef: editForm.externalRef,
-        }),
-      });
-
-      if (response.ok) {
-        setEditForm(null);
-        await mutate();
-        return;
-      }
-
-      const body = await response.json().catch(() => null);
-      setEditError(body?.error ?? 'Failed to update transaction.');
-    } catch {
-      setEditError('Failed to update transaction.');
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   return (
-    <main className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Transactions</h2>
-        <p className="text-sm text-zinc-600">
-          Review income and expenses by date, category, and page size.
-        </p>
-      </div>
+    <main className="min-w-0 space-y-5">
+      <PageHeader
+        title="Transactions"
+        description="Review income and expenses by date, category, and page size."
+      />
 
       <SummaryCards
         income={data?.totals.income ?? 0}
@@ -188,342 +70,76 @@ export default function TransactionsPage() {
         net={data?.totals.net ?? 0}
       />
 
-      <div className="card p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
-          <div className="sm:col-span-3">
-            <label className="label">Date range</label>
-            <select
-              className="select"
-              value={preset}
-              onChange={(event) => {
-                setPreset(event.target.value as DatePreset);
-                setPage(1);
-              }}
-            >
-              {Object.entries(datePresetLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="label">From</label>
-            <input
-              type="date"
-              className="input"
-              value={from}
-              onChange={(event) => {
-                setCustomFrom(event.target.value);
-                setPreset('CUSTOM');
-                setPage(1);
-              }}
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="label">To</label>
-            <input
-              type="date"
-              className="input"
-              value={to}
-              onChange={(event) => {
-                setCustomTo(event.target.value);
-                setPreset('CUSTOM');
-                setPage(1);
-              }}
-            />
-          </div>
-
-          <div className="sm:col-span-3">
-            <label className="label">Category</label>
-            <select
-              className="select"
-              value={categoryId}
-              onChange={(event) => {
-                setCategoryId(event.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All Categories</option>
-              {(categories ?? []).map((category) => (
-                <option key={category.id} value={String(category.id)}>
-                  {category.name} ({category.kind})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="label">Rows</label>
-            <select
-              className="select"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value) as 10 | 20 | 50);
-                setPage(1);
-              }}
-            >
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <FinanceFilters
+        categories={categories ?? []}
+        preset={filters.preset}
+        from={filters.from}
+        to={filters.to}
+        categoryId={filters.categoryId}
+        pageSize={pageSize}
+        onPresetChange={filters.setPreset}
+        onFromChange={filters.setFrom}
+        onToChange={filters.setTo}
+        onCategoryChange={filters.setCategoryId}
+        onPageSizeChange={(value) => {
+          setPageSize(value);
+          setPage(1);
+        }}
+      />
 
       {error && (
-        <div className="card border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="card border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           Failed to load transactions. Please try again.
         </div>
       )}
 
-      <div className="card overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-zinc-50 text-zinc-600">
-            <tr>
-              <th className="px-4 py-2 text-left">Date</th>
-              <th className="px-4 py-2 text-left">Type</th>
-              <th className="px-4 py-2 text-left">Category</th>
-              <th className="px-4 py-2 text-left">Source</th>
-              <th className="px-4 py-2 text-left">Person / Shop</th>
-              <th className="px-4 py-2 text-right">Amount</th>
-              <th className="px-4 py-2 text-left">Note</th>
-              <th className="px-4 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr>
-                <td className="px-4 py-6 text-center text-zinc-500" colSpan={8}>
-                  Loading...
-                </td>
-              </tr>
-            )}
-            {!isLoading &&
-              (data?.items ?? []).map((transaction) => (
-                <tr key={transaction.id} className="border-t">
-                  <td className="whitespace-nowrap px-4 py-2">
-                    <div>{formatMalaysiaDate(transaction.date)}</div>
-                    <div className="text-xs text-zinc-500">
-                      {formatMalaysiaTime(transaction.date)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2">{transaction.type}</td>
-                  <td className="px-4 py-2">{transaction.category.name}</td>
-                  <td className="px-4 py-2">{transaction.source ?? ''}</td>
-                  <td className="px-4 py-2">{transaction.counterparty ?? ''}</td>
-                  <td className="px-4 py-2 text-right font-medium">
-                    {formatCurrency(Number(transaction.amount))}
-                  </td>
-                  <td className="px-4 py-2">{transaction.note ?? ''}</td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="flex justify-end gap-3">
-                      <button
-                        className="text-xs font-medium text-zinc-700 hover:underline"
-                        onClick={() => {
-                          setEditError('');
-                          setEditForm(toEditForm(transaction));
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="text-xs font-medium text-red-600 hover:underline"
-                        onClick={() => remove(transaction.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            {!isLoading && (data?.items?.length ?? 0) === 0 && (
-              <tr>
-                <td className="px-4 py-6 text-center text-zinc-500" colSpan={8}>
-                  No transactions found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <TransactionTable
+        items={data?.items ?? []}
+        isLoading={isLoading}
+        emptyMessage="No transactions found."
+        onEdit={editor.openEditor}
+        onDelete={editor.removeTransaction}
+      />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-zinc-600">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 text-sm text-zinc-600">
           Page {data?.page ?? page} of {totalPages}
-          {data && (
-            <>
-              {' '}
-              - {data.totalCount} record{data.totalCount === 1 ? '' : 's'}
-            </>
-          )}
+          {data && <span className="hidden sm:inline"> · {data.totalCount} record{data.totalCount === 1 ? '' : 's'}</span>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           <button
-            className="btn"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            type="button"
+            className="icon-btn border border-zinc-300 bg-white"
+            aria-label="Previous page"
+            title="Previous page"
             disabled={page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
           >
-            Previous
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
           <button
-            className="btn"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            type="button"
+            className="icon-btn border border-zinc-300 bg-white"
+            aria-label="Next page"
+            title="Next page"
             disabled={page >= totalPages}
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
           >
-            Next
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      {editForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
-          <form
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 shadow-xl"
-            onSubmit={saveEdit}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-900">Edit Transaction</h2>
-                <p className="text-sm text-zinc-500">Review imported details before saving.</p>
-              </div>
-              <button
-                type="button"
-                className="text-sm font-medium text-zinc-500 hover:text-zinc-900"
-                onClick={() => setEditForm(null)}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="label">Type</label>
-                <select
-                  className="select"
-                  value={editForm.type}
-                  onChange={(event) =>
-                    setEditForm({
-                      ...editForm,
-                      type: event.target.value as 'INCOME' | 'EXPENSE',
-                      categoryId: '',
-                    })
-                  }
-                >
-                  <option value="EXPENSE">Expense</option>
-                  <option value="INCOME">Income</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Amount</label>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  required
-                  value={editForm.amount}
-                  onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="label">Date and time</label>
-                <input
-                  className="input"
-                  type="datetime-local"
-                  required
-                  value={dateTimeInputValue(editForm.date)}
-                  onChange={(event) =>
-                    setEditForm({ ...editForm, date: dateTimeInputToIso(event.target.value) })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="label">Category</label>
-                <select
-                  className="select"
-                  required
-                  value={editForm.categoryId}
-                  onChange={(event) => setEditForm({ ...editForm, categoryId: event.target.value })}
-                >
-                  <option value="">Select</option>
-                  {categoryOptions.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label">Bank / E-wallet</label>
-                <input
-                  className="input"
-                  value={editForm.source}
-                  onChange={(event) => setEditForm({ ...editForm, source: event.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="label">Person / Shop</label>
-                <input
-                  className="input"
-                  value={editForm.counterparty}
-                  onChange={(event) =>
-                    setEditForm({ ...editForm, counterparty: event.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="label">Reference</label>
-                <input
-                  className="input"
-                  value={editForm.externalRef}
-                  onChange={(event) =>
-                    setEditForm({ ...editForm, externalRef: event.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="label">Note</label>
-                <input
-                  className="input"
-                  value={editForm.note}
-                  onChange={(event) => setEditForm({ ...editForm, note: event.target.value })}
-                />
-              </div>
-            </div>
-
-            {editForm.rawBody && (
-              <div className="mt-4">
-                <label className="label">Raw Notification</label>
-                <textarea className="input min-h-20 resize-y" readOnly value={editForm.rawBody} />
-              </div>
-            )}
-
-            {editError && (
-              <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {editError}
-              </div>
-            )}
-
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="btn" onClick={() => setEditForm(null)}>
-                Cancel
-              </button>
-              <button className="btn" disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </form>
-        </div>
+      {editor.editForm && (
+        <TransactionEditDialog
+          value={editor.editForm}
+          categories={categories ?? []}
+          error={editor.editError}
+          isSaving={editor.isSaving}
+          onChange={editor.setEditForm}
+          onClose={editor.closeEditor}
+          onSubmit={editor.saveTransaction}
+        />
       )}
     </main>
   );

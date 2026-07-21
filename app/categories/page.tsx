@@ -2,6 +2,8 @@
 
 import useSWR from 'swr';
 import { FormEvent, useMemo, useState } from 'react';
+import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 import { authFetch, fetcher } from '@/lib/apiClient';
 
 type Category = {
@@ -113,7 +115,7 @@ export default function CategoriesPage() {
 
   function renderGroup(title: string, items: Category[]) {
     return (
-      <section className="card overflow-hidden">
+      <section className="card min-w-0 overflow-hidden">
         <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
           <h2 className="text-sm font-semibold text-zinc-800">{title}</h2>
         </div>
@@ -121,7 +123,7 @@ export default function CategoriesPage() {
           {items.map((category) => (
             <div key={category.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               {edit?.id === category.id ? (
-                <form className="flex flex-1 gap-2" onSubmit={renameCategory}>
+                <form className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row" onSubmit={renameCategory}>
                   <input
                     className="input"
                     value={edit.name}
@@ -130,9 +132,11 @@ export default function CategoriesPage() {
                     required
                   />
                   <button className="btn" disabled={isSaving}>
+                    <Save className="h-4 w-4" aria-hidden="true" />
                     Save
                   </button>
                   <button type="button" className="btn" onClick={() => setEdit(null)}>
+                    <X className="h-4 w-4" aria-hidden="true" />
                     Cancel
                   </button>
                 </form>
@@ -150,6 +154,7 @@ export default function CategoriesPage() {
                         setEdit({ id: category.id, name: category.name });
                       }}
                     >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
                       Rename
                     </button>
                     <button
@@ -157,6 +162,7 @@ export default function CategoriesPage() {
                       disabled={isSaving}
                       onClick={() => deleteCategory(category)}
                     >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                       Delete
                     </button>
                   </div>
@@ -173,11 +179,8 @@ export default function CategoriesPage() {
   }
 
   return (
-    <main className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Categories</h2>
-        <p className="text-sm text-zinc-600">Add or rename transaction categories.</p>
-      </div>
+    <main className="min-w-0 space-y-5">
+      <PageHeader title="Categories" description="Add, rename, or remove unused categories." />
 
       <form className="card p-4" onSubmit={addCategory}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
@@ -205,13 +208,14 @@ export default function CategoriesPage() {
           </div>
 
           <button className="btn" disabled={isSaving}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
             Add
           </button>
         </div>
       </form>
 
       {(message || error) && (
-        <div className="card border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="card border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {message || 'Failed to load categories.'}
         </div>
       )}

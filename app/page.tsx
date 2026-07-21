@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { RefreshCw } from 'lucide-react';
+import PageHeader, { SectionHeader } from '@/components/PageHeader';
 import SummaryCards from '@/components/SummaryCards';
 import TransactionForm from '@/components/TransactionForm';
 import TransactionList from '@/components/TransactionList';
@@ -20,29 +22,32 @@ export default function HomePage() {
   };
 
   return (
-    <main className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Dashboard</h2>
-        <p className="text-sm text-zinc-600">Add transactions and review your latest balance at a glance.</p>
-      </div>
+    <main className="min-w-0 space-y-5">
+      <PageHeader
+        title="Dashboard"
+        description="Add transactions and review your latest balance at a glance."
+      />
 
       <SummaryCards income={data?.totals.income ?? 0} expense={data?.totals.expense ?? 0} net={data?.totals.net ?? 0} />
 
       {error && (
-        <div className="card border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="card border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           Failed to load totals. You can still try adding a transaction.
         </div>
       )}
 
       <TransactionForm onCreated={refreshAll} />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-800">Recent Transactions</h2>
-          <p className="text-sm text-zinc-500">The latest entries across income and expenses.</p>
-        </div>
-        <button className="btn" onClick={refreshAll}>Refresh</button>
-      </div>
+      <SectionHeader
+        title="Recent Transactions"
+        description="The latest entries across income and expenses."
+        actions={
+          <button className="btn" onClick={refreshAll}>
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Refresh
+          </button>
+        }
+      />
 
       <TransactionList refreshKey={refreshKey} onChanged={refreshAll} />
     </main>

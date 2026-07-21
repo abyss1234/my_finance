@@ -1,20 +1,38 @@
 @import "tailwindcss";
 
+@layer base {
+  html {
+    @apply bg-zinc-100;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply focus-visible:outline-none;
+  }
+}
+
 @layer components {
   .card {
     @apply rounded-lg border border-zinc-200 bg-white shadow-sm;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-300 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .icon-btn {
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-transparent text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1;
   }
 
   .input {
-    @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-zinc-300;
+    @apply min-h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm transition placeholder:text-zinc-400 focus-visible:border-zinc-400 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-100;
   }
 
   .select {
-    @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-zinc-300;
+    @apply min-h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm transition focus-visible:border-zinc-400 focus-visible:ring-2 focus-visible:ring-zinc-300 disabled:cursor-not-allowed disabled:bg-zinc-100;
   }
 
   .label {
