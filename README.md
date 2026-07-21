@@ -93,7 +93,7 @@ Required header:
 x-api-key: your-phone-api-key
 ```
 
-Received requests are shown on the protected **Phone Receipts** page.
+Received requests are shown on the protected **Macro Logs** page.
 
 ## Vercel Deploy
 

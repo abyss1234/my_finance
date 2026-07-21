@@ -66,7 +66,7 @@ function parseStructuredNotification(
   }
 
   const maeFundsReceived = text.match(
-    /^You['\u2019]ve just received RM\s*([\d,]+(?:\.\d{1,2})?)\s+in your account ending\s+(.+?)\.\s*REF:\s*([A-Z0-9]+)$/i
+    /^You['\u2019]ve just received RM\s*([\d,]+(?:\.\d{1,2})?)\s+in your account ending\s+(.+?)\.\s*REF:\s*(.+?)\s*$/i
   );
 
   if (/^MAE$/i.test(app) && /Maybank2u:\s*Funds Received/i.test(title) && maeFundsReceived) {
