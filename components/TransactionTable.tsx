@@ -62,17 +62,17 @@ export default function TransactionTable({
 }: Props) {
   return (
     <section className="card min-w-0 overflow-hidden">
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[920px] table-fixed text-sm">
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full min-w-[820px] table-fixed text-sm">
           <colgroup>
-            <col className="w-32" />
-            <col className="w-24" />
-            <col className="w-36" />
-            <col className="w-36" />
-            <col className="w-48" />
-            <col className="w-32" />
+            <col className="w-28" />
+            <col className="w-20" />
+            <col className="w-28" />
+            <col className="w-28" />
+            <col className="w-40" />
+            <col className="w-28" />
             <col />
-            <col className="w-24" />
+            <col className="w-20" />
           </colgroup>
           <thead className="border-b border-zinc-200 bg-zinc-50 text-xs font-semibold text-zinc-600">
             <tr>
@@ -116,7 +116,7 @@ export default function TransactionTable({
         </table>
       </div>
 
-      <div className="divide-y divide-zinc-100 md:hidden">
+      <div className="divide-y divide-zinc-100 lg:hidden">
         {isLoading && <div className="p-8 text-center text-sm text-zinc-500">Loading...</div>}
         {!isLoading && items.map((transaction) => (
           <article key={transaction.id} className="space-y-3 p-4">

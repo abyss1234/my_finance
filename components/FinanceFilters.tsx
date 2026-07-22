@@ -1,7 +1,7 @@
 'use client';
 
-import { useId } from 'react';
-import { ListFilter } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ChevronDown, ListFilter } from 'lucide-react';
 import CategoryMultiSelect from '@/components/CategoryMultiSelect';
 import { DatePreset, datePresetLabels } from '@/lib/finance';
 import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
@@ -9,11 +9,15 @@ import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
 type CommonProps = {
   categories: CategoryOption[];
   preset: DatePreset;
+  presetOptions?: DatePreset[];
   from: string;
   to: string;
+  comparePrevious?: boolean;
+  collapsibleOnMobile?: boolean;
   onPresetChange: (value: DatePreset) => void;
   onFromChange: (value: string) => void;
   onToChange: (value: string) => void;
+  onComparePreviousChange?: (value: boolean) => void;
 };
 
 type SingleCategoryProps = {
@@ -34,8 +38,23 @@ type Props = CommonProps & (SingleCategoryProps | TransactionCategoryProps);
 
 export default function FinanceFilters(props: Props) {
   const id = useId();
-  const { categories, preset, from, to, onPresetChange, onFromChange, onToChange } = props;
+  const {
+    categories,
+    preset,
+    presetOptions = Object.keys(datePresetLabels) as DatePreset[],
+    from,
+    to,
+    comparePrevious,
+    collapsibleOnMobile = false,
+    onPresetChange,
+    onFromChange,
+    onToChange,
+    onComparePreviousChange,
+  } = props;
+  const [mobileOpen, setMobileOpen] = useState(false);
   const isTransactionFilter = props.mode === 'transactions';
+  const hasComparison =
+    comparePrevious !== undefined && onComparePreviousChange !== undefined;
   const visibleCategories = isTransactionFilter
     ? categories.filter((category) => category.kind === props.transactionType)
     : categories;
@@ -47,10 +66,28 @@ export default function FinanceFilters(props: Props) {
         <h2 id={`${id}-title`} className="text-sm font-semibold text-zinc-900">
           Filters
         </h2>
+        {collapsibleOnMobile && (
+          <button
+            type="button"
+            className="icon-btn ml-auto sm:hidden"
+            aria-label={mobileOpen ? 'Collapse filters' : 'Expand filters'}
+            aria-expanded={mobileOpen}
+            aria-controls={`${id}-fields`}
+            onClick={() => setMobileOpen((current) => !current)}
+          >
+            <ChevronDown
+              className={`h-4 w-4 transition ${mobileOpen ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
-        <div className="lg:col-span-3">
+      <div
+        id={`${id}-fields`}
+        className={`${collapsibleOnMobile && !mobileOpen ? 'hidden' : 'grid'} grid-cols-1 gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-12`}
+      >
+        <div className={hasComparison ? 'lg:col-span-2' : 'lg:col-span-3'}>
           <label className="label" htmlFor={`${id}-preset`}>
             Date range
           </label>
@@ -60,9 +97,9 @@ export default function FinanceFilters(props: Props) {
             value={preset}
             onChange={(event) => onPresetChange(event.target.value as DatePreset)}
           >
-            {Object.entries(datePresetLabels).map(([value, label]) => (
+            {presetOptions.map((value) => (
               <option key={value} value={value}>
-                {label}
+                {datePresetLabels[value]}
               </option>
             ))}
           </select>
@@ -114,7 +151,7 @@ export default function FinanceFilters(props: Props) {
               </select>
             </div>
 
-            <div className="lg:col-span-3">
+            <div className={hasComparison ? 'lg:col-span-2' : 'lg:col-span-3'}>
               <label className="label" htmlFor={`${id}-category`}>
                 Category
               </label>
@@ -147,6 +184,36 @@ export default function FinanceFilters(props: Props) {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {hasComparison && (
+          <div className="lg:col-span-2">
+            <span id={`${id}-compare-label`} className="label">
+              Previous period
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={comparePrevious}
+              aria-labelledby={`${id}-compare-label`}
+              className="flex min-h-10 w-full items-center justify-between rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-700 transition focus-visible:border-zinc-400 focus-visible:ring-2 focus-visible:ring-zinc-300"
+              onClick={() => onComparePreviousChange(!comparePrevious)}
+            >
+              <span>{comparePrevious ? 'Enabled' : 'Disabled'}</span>
+              <span
+                className={`flex h-5 w-9 items-center rounded-full p-0.5 transition ${
+                  comparePrevious ? 'bg-zinc-900' : 'bg-zinc-300'
+                }`}
+                aria-hidden="true"
+              >
+                <span
+                  className={`h-4 w-4 rounded-full bg-white shadow-sm transition ${
+                    comparePrevious ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </span>
+            </button>
           </div>
         )}
       </div>

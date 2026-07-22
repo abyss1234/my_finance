@@ -1,15 +1,26 @@
 import {
   addDays,
+  addMonths,
   endOfDay,
   endOfMonth,
   endOfWeek,
+  endOfYear,
   startOfDay,
   startOfMonth,
   startOfWeek,
+  startOfYear,
 } from 'date-fns';
 
 export type TransactionType = 'INCOME' | 'EXPENSE';
-export type DatePreset = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_WEEK' | 'TODAY' | 'ALL' | 'CUSTOM';
+export type DatePreset =
+  | 'THIS_WEEK'
+  | 'THIS_MONTH'
+  | 'LAST_MONTH'
+  | 'LAST_3_MONTHS'
+  | 'THIS_YEAR'
+  | 'TODAY'
+  | 'ALL'
+  | 'CUSTOM';
 
 const malaysiaTimeZone = 'Asia/Kuala_Lumpur';
 const malaysiaOffsetMs = 8 * 60 * 60 * 1000;
@@ -34,9 +45,11 @@ const malaysiaDatePartsFormatter = new Intl.DateTimeFormat('en-CA', {
 });
 
 export const datePresetLabels: Record<DatePreset, string> = {
+  THIS_WEEK: 'This Week',
   THIS_MONTH: 'This Month',
   LAST_MONTH: 'Last Month',
-  THIS_WEEK: 'This Week',
+  LAST_3_MONTHS: 'Last 3 Months',
+  THIS_YEAR: 'This Year',
   TODAY: 'Today',
   ALL: 'All Time',
   CUSTOM: 'Custom',
@@ -109,6 +122,13 @@ export function rangeForPreset(preset: Exclude<DatePreset, 'CUSTOM'>) {
         from: startOfWeek(now, { weekStartsOn: 1 }),
         to: endOfWeek(now, { weekStartsOn: 1 }),
       };
+    case 'LAST_3_MONTHS':
+      return {
+        from: startOfMonth(addMonths(now, -2)),
+        to: endOfMonth(now),
+      };
+    case 'THIS_YEAR':
+      return { from: startOfYear(now), to: endOfYear(now) };
     case 'TODAY':
       return { from: startOfDay(now), to: endOfDay(now) };
     case 'ALL':

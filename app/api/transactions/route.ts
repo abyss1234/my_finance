@@ -27,6 +27,7 @@ export async function GET(req: Request) {
     const type = parseTransactionType(searchParams.get('type'));
     const from = parseDate(searchParams.get('from'));
     const to = parseDate(searchParams.get('to'));
+    const counterparty = searchParams.get('counterparty')?.trim() ?? '';
     const rawCategoryIds = searchParams.getAll('categoryId').filter(Boolean);
     const requestedPage = Number(searchParams.get('page') || '1');
     const requestedPageSize = Number(searchParams.get('pageSize') || '10');
@@ -51,6 +52,11 @@ export async function GET(req: Request) {
       where.date = date;
     }
     if (categoryIds.length > 0) where.categoryId = { in: [...new Set(categoryIds)] };
+    if (counterparty === '__UNKNOWN__') {
+      where.OR = [{ counterparty: null }, { counterparty: '' }];
+    } else if (counterparty) {
+      where.counterparty = { equals: counterparty, mode: 'insensitive' };
+    }
 
     const [items, totals, totalCount] = await Promise.all([
       prisma.transaction.findMany({

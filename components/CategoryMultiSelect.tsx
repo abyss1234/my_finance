@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronDown } from 'lucide-react';
+import { CheckCheck, ChevronDown, X } from 'lucide-react';
 import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
 
 type Props = {
@@ -87,17 +87,26 @@ export default function CategoryMultiSelect({
           aria-label="Categories"
           className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg"
         >
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-400"
-            onClick={() => onChange([])}
-          >
-            <Check
-              className={`h-4 w-4 shrink-0 ${selectedIds.length === 0 ? 'opacity-100' : 'opacity-0'}`}
-              aria-hidden="true"
-            />
-            All {typeLabel} categories
-          </button>
+          <div className="mb-1 grid grid-cols-2 gap-1 border-b border-zinc-100 p-1 pb-2">
+            <button
+              type="button"
+              className="flex min-h-8 items-center justify-center gap-1 rounded px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-40"
+              disabled={selectedIds.length === 0}
+              onClick={() => onChange([])}
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+              Clear selection
+            </button>
+            <button
+              type="button"
+              className="flex min-h-8 items-center justify-center gap-1 rounded px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:opacity-40"
+              disabled={categories.length === 0 || selectedIds.length === categories.length}
+              onClick={() => onChange(categories.map((category) => String(category.id)))}
+            >
+              <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Select all
+            </button>
+          </div>
 
           {categories.map((category) => {
             const categoryId = String(category.id);
