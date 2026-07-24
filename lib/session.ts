@@ -1,1 +1,1 @@
-export const sessionMaxAgeSeconds = 15 * 60;
+export const sessionMaxAgeSeconds = 7 * 24 * 60 * 60;
