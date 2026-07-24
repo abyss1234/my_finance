@@ -169,6 +169,25 @@ function parseStructuredNotification(
     };
   }
 
+  const tngMerchantPayment = text.match(
+    /^.+?:\s*RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been deducted from your TNG eWallet\.\s*Your payment to\s+(.+?)\s+for account Number\s+(.+?)\s+is pending acceptance on merchant side\.?$/i
+  );
+
+  if (
+    /^TNG eWallet$/i.test(app) &&
+    /^Payment To:\s*.+$/i.test(title) &&
+    tngMerchantPayment
+  ) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(tngMerchantPayment[1]),
+      source: app,
+      counterparty: cleanName(tngMerchantPayment[2]),
+      externalRef: `Account ${cleanName(tngMerchantPayment[3])}`,
+      date,
+    };
+  }
+
   const tngSent = text.match(
     /^RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been successfully transferred to\s+(.+?)\.$/i
   );
