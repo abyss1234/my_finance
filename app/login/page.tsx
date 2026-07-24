@@ -1,12 +1,16 @@
 'use client';
 
 import { FormEvent, Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { LogIn } from 'lucide-react';
 
+function getSafeNextPath(next: string | null) {
+  return next?.startsWith('/') && !next.startsWith('//') ? next : '/';
+}
+
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const hasConfigurationError = searchParams.get('error') === 'configuration';
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,8 +28,7 @@ function LoginForm() {
       });
 
       if (response.ok) {
-        router.replace(searchParams.get('next') || '/');
-        router.refresh();
+        window.location.replace(getSafeNextPath(searchParams.get('next')));
         return;
       }
 
@@ -45,10 +48,20 @@ function LoginForm() {
         <p className="text-sm text-zinc-500">Enter your app password to continue.</p>
       </div>
 
-      <label className="label">Password</label>
+      {hasConfigurationError && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Authentication is not configured. Set APP_PASSWORD_HASH and APP_SESSION_SECRET.
+        </div>
+      )}
+
+      <label className="label" htmlFor="login-password">
+        Password
+      </label>
       <input
+        id="login-password"
         className="input"
         type="password"
+        autoComplete="current-password"
         autoFocus
         required
         value={password}

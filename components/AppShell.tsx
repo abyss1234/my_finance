@@ -83,7 +83,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-zinc-100">
         <header className="border-b border-zinc-200 bg-white">
           <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 sm:px-6">
-            <Link href="/" className="flex min-w-0 items-center gap-2 text-zinc-950">
+            <Link
+              href="/"
+              prefetch={false}
+              className="flex min-w-0 items-center gap-2 text-zinc-950"
+            >
               <WalletCards className="h-5 w-5 shrink-0" aria-hidden="true" />
               <span className="truncate text-base font-semibold">{appName}</span>
             </Link>

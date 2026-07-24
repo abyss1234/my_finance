@@ -8,7 +8,7 @@ A simple personal finance app built with Next.js, Prisma, PostgreSQL, and Tailwi
 - Category-based transaction tracking
 - Dashboard summary and analysis charts
 - MacroDroid API endpoint for phone notification imports
-- Simple password login for the web app
+- Salted password-hash login for the web app
 - API key protection for MacroDroid requests
 
 ## Tech Stack
@@ -28,12 +28,27 @@ Create `.env`:
 DATABASE_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require"
 DIRECT_URL="postgresql://USER:PASSWORD@HOST/neondb?sslmode=require"
 
-APP_PASSWORD="your-login-password"
+APP_PASSWORD_HASH="generate-with-the-command-below"
 APP_SESSION_SECRET="random-long-secret"
 MACRODROID_API_KEY="your-phone-api-key"
 
 NEXT_PUBLIC_APP_NAME="Simple Finance"
 ```
+
+Generate a salted password hash:
+
+```bash
+npm run auth:hash-password
+```
+
+Copy the generated `APP_PASSWORD_HASH` line into `.env`. When upgrading an existing
+`.env` that still has `APP_PASSWORD`, migrate it automatically:
+
+```bash
+npm run auth:hash-password -- --update-env
+```
+
+Use a different long random value for `APP_SESSION_SECRET`.
 
 For Vercel + Neon:
 
@@ -108,6 +123,12 @@ project/myfinance_app
 4. Add all environment variables in Vercel.
 5. Deploy.
 
+For an existing Vercel deployment that still uses `APP_PASSWORD`:
+
+1. Add `APP_PASSWORD_HASH` from your local `.env` while temporarily keeping `APP_PASSWORD`.
+2. Deploy this updated code and confirm that login works.
+3. Remove `APP_PASSWORD` from Vercel because the new code no longer uses it.
+
 Before using the deployed app, run migrations against the production database:
 
 ```bash
@@ -122,11 +143,12 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm run auth:hash-password
 ```
 
 ## Notes
 
 - Do not commit `.env`.
 - MacroDroid must send `x-api-key`.
-- Web users must login with `APP_PASSWORD`.
+- Web users must log in with the password represented by `APP_PASSWORD_HASH`.
 - MacroDroid receipts are stored even when the transaction format is not recognized.

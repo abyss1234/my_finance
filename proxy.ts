@@ -43,8 +43,19 @@ export async function proxy(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid MacroDroid API key' }, { status: 401 });
   }
 
-  if (!isAuthConfigured() || isPublicPath(pathname)) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!isAuthConfigured()) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Authentication is not configured' }, { status: 503 });
+    }
+
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('next', `${pathname}${search}`);
+    loginUrl.searchParams.set('error', 'configuration');
+    return NextResponse.redirect(loginUrl);
   }
 
   if (isLoggedIn) {

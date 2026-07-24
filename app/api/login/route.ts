@@ -1,18 +1,29 @@
 import { NextResponse } from 'next/server';
 import { authCookieName, createSessionCookieValue, sessionMaxAgeSeconds } from '@/lib/auth';
+import { isSupportedPasswordHash, verifyPassword } from '@/lib/password';
 
 type LoginBody = {
   password?: unknown;
 };
 
+export const runtime = 'nodejs';
+
 export async function POST(req: Request) {
-  const appPassword = process.env.APP_PASSWORD;
-  if (!appPassword) {
-    return NextResponse.json({ error: 'APP_PASSWORD is not configured' }, { status: 500 });
+  const passwordHash = process.env.APP_PASSWORD_HASH;
+  if (!isSupportedPasswordHash(passwordHash) || !process.env.APP_SESSION_SECRET) {
+    return NextResponse.json(
+      { error: 'Authentication environment variables are not configured correctly' },
+      { status: 500 }
+    );
   }
 
-  const body = (await req.json()) as LoginBody;
-  if (body.password !== appPassword) {
+  const body = (await req.json().catch(() => null)) as LoginBody | null;
+  const password = body?.password;
+  if (
+    typeof password !== 'string' ||
+    password.length > 1024 ||
+    !(await verifyPassword(password, passwordHash))
+  ) {
     return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
   }
 

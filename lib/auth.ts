@@ -5,11 +5,11 @@ export { sessionMaxAgeSeconds };
 export const authCookieName = 'myfinance_auth';
 
 export function isAuthConfigured() {
-  return Boolean(process.env.APP_PASSWORD);
+  return Boolean(process.env.APP_PASSWORD_HASH && process.env.APP_SESSION_SECRET);
 }
 
 function sessionSecret() {
-  return process.env.APP_SESSION_SECRET || process.env.APP_PASSWORD || '';
+  return process.env.APP_SESSION_SECRET || '';
 }
 
 function toHex(buffer: ArrayBuffer) {
