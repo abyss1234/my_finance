@@ -20,6 +20,10 @@ export function useFinanceFilters(onChange?: () => void) {
   }, [preset, customFrom, customTo]);
 
   function setPreset(value: DatePreset) {
+    if (value === 'CUSTOM' && preset !== 'CUSTOM') {
+      setCustomFrom(from);
+      setCustomTo(to);
+    }
     setPresetState(value);
     onChange?.();
   }
@@ -41,5 +45,23 @@ export function useFinanceFilters(onChange?: () => void) {
     onChange?.();
   }
 
-  return { preset, from, to, categoryId, setPreset, setFrom, setTo, setCategoryId };
+  function reset() {
+    setPresetState('THIS_MONTH');
+    setCustomFrom('');
+    setCustomTo('');
+    setCategoryIdState('');
+    onChange?.();
+  }
+
+  return {
+    preset,
+    from,
+    to,
+    categoryId,
+    setPreset,
+    setFrom,
+    setTo,
+    setCategoryId,
+    reset,
+  };
 }

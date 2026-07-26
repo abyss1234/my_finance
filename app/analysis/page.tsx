@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import AnalysisSummaryCards from '@/components/analysis/AnalysisSummaryCards';
 import BudgetProgress from '@/components/analysis/BudgetProgress';
@@ -9,6 +9,7 @@ import CategoryDetailsTable from '@/components/analysis/CategoryDetailsTable';
 import FinancialInsights from '@/components/analysis/FinancialInsights';
 import MerchantSummary from '@/components/analysis/MerchantSummary';
 import RelatedTransactions from '@/components/analysis/RelatedTransactions';
+import StickyAnalysisFilters from '@/components/analysis/StickyAnalysisFilters';
 import TrendChart from '@/components/analysis/TrendChart';
 import FinanceFilters from '@/components/FinanceFilters';
 import PageHeader from '@/components/PageHeader';
@@ -31,6 +32,7 @@ import {
   dateInputToIso,
   datePresetLabels,
   formatCurrency,
+  formatMalaysiaDate,
   malaysiaDateKey,
   type DatePreset,
 } from '@/lib/finance';
@@ -60,17 +62,61 @@ function applyDateRange(params: URLSearchParams, from: string, to: string) {
   if (toIso) params.set('to', toIso);
 }
 
+const monthYearFormatter = new Intl.DateTimeFormat('en-MY', {
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const shortDateFormatter = new Intl.DateTimeFormat('en-MY', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+function dateKeyToDate(value: string) {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+function compactDateLabel(preset: DatePreset, from: string, to: string) {
+  if (
+    (preset === 'THIS_MONTH' || preset === 'LAST_MONTH') &&
+    from
+  ) {
+    return monthYearFormatter.format(dateKeyToDate(from));
+  }
+  if (preset !== 'CUSTOM') return datePresetLabels[preset];
+  if (!from || !to) return 'Custom Range';
+  if (from === to) return shortDateFormatter.format(dateKeyToDate(from));
+  return `${shortDateFormatter.format(dateKeyToDate(from))} - ${shortDateFormatter.format(dateKeyToDate(to))}`;
+}
+
 export default function AnalysisPage() {
   const [transactionType, setTransactionType] = useState<'' | TransactionKind>('');
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
-  const [comparePrevious, setComparePrevious] = useState(true);
+  const [comparePrevious, setComparePrevious] = useState(false);
   const [grouping, setGrouping] = useState<GroupingSelection>('AUTO');
   const [detail, setDetail] = useState<AnalysisDetailFilter | null>(null);
   const [relatedPage, setRelatedPage] = useState(1);
+  const [mobileFiltersExpanded, setMobileFiltersExpanded] = useState(false);
+  const [showStickyFilters, setShowStickyFilters] = useState(false);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
   const filters = useFinanceFilters(() => {
     setDetail(null);
     setRelatedPage(1);
   });
+
+  useEffect(() => {
+    const filterPanel = filterPanelRef.current;
+    if (!filterPanel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyFilters(!entry.isIntersecting),
+      { rootMargin: '-72px 0px 0px', threshold: 0 }
+    );
+    observer.observe(filterPanel);
+    return () => observer.disconnect();
+  }, []);
 
   const invalidDateRange = Boolean(filters.from && filters.to && filters.from > filters.to);
   const { data: categories } = useSWR<CategoryOption[]>('/api/categories', fetcher);
@@ -117,6 +163,50 @@ export default function AnalysisPage() {
     () => buildBudgetProgress(budgets ?? [], data?.byCategory ?? [], data?.totals.expense ?? 0),
     [budgets, data]
   );
+
+  const comparisonRange =
+    data?.meta.previousFrom && data.meta.previousTo
+      ? `${formatMalaysiaDate(data.meta.previousFrom)} - ${formatMalaysiaDate(data.meta.previousTo)}`
+      : undefined;
+  const comparisonAvailable = Boolean(
+    comparePrevious && data?.meta.previousDataAvailable
+  );
+  const comparisonUnavailable = Boolean(
+    comparePrevious && !isLoading && data && !data.meta.previousDataAvailable
+  );
+
+  const stickyFilterSummary = useMemo(() => {
+    const typeLabel =
+      transactionType === 'INCOME'
+        ? 'Income'
+        : transactionType === 'EXPENSE'
+          ? 'Expense'
+          : 'All Types';
+    const selectedCategoryNames = categories
+      ?.filter((category) => categoryIds.includes(String(category.id)))
+      .map((category) => category.name);
+    const categoryLabel =
+      categoryIds.length === 0
+        ? 'All Categories'
+        : categoryIds.length === 1
+          ? selectedCategoryNames?.[0] ?? '1 Category'
+          : `${categoryIds.length} Categories`;
+
+    return [
+      compactDateLabel(filters.preset, filters.from, filters.to),
+      typeLabel,
+      categoryLabel,
+      comparePrevious ? 'Compare On' : 'Compare Off',
+    ].join(' · ');
+  }, [
+    categories,
+    categoryIds,
+    comparePrevious,
+    filters.from,
+    filters.preset,
+    filters.to,
+    transactionType,
+  ]);
 
   const relatedQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -222,6 +312,21 @@ export default function AnalysisPage() {
     });
   }
 
+  function resetFilters() {
+    filters.reset();
+    setTransactionType('');
+    setCategoryIds([]);
+    setComparePrevious(false);
+    setGrouping('AUTO');
+    setDetail(null);
+    setRelatedPage(1);
+  }
+
+  function openFullFilters() {
+    setMobileFiltersExpanded(true);
+    filterPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
     <main className="min-w-0 space-y-5">
       <PageHeader
@@ -229,33 +334,47 @@ export default function AnalysisPage() {
         description="Understand your income, expenses, cash flow, and financial trends."
       />
 
-      <FinanceFilters
-        mode="transactions"
-        categories={categories ?? []}
-        preset={filters.preset}
-        presetOptions={analysisPresets}
-        from={filters.from}
-        to={filters.to}
-        transactionType={transactionType}
-        categoryIds={categoryIds}
-        comparePrevious={comparePrevious}
-        collapsibleOnMobile
-        onPresetChange={filters.setPreset}
-        onFromChange={filters.setFrom}
-        onToChange={filters.setTo}
-        onTransactionTypeChange={(value) => {
-          setTransactionType(value);
-          setCategoryIds([]);
-          setDetail(null);
-          setRelatedPage(1);
-        }}
-        onCategoryIdsChange={(ids) => {
-          setCategoryIds(ids);
-          setDetail(null);
-          setRelatedPage(1);
-        }}
-        onComparePreviousChange={setComparePrevious}
+      <StickyAnalysisFilters
+        visible={showStickyFilters}
+        summary={stickyFilterSummary}
+        onOpen={openFullFilters}
       />
+
+      <div ref={filterPanelRef} className="scroll-mt-20">
+        <FinanceFilters
+          mode="transactions"
+          categories={categories ?? []}
+          preset={filters.preset}
+          presetOptions={analysisPresets}
+          from={filters.from}
+          to={filters.to}
+          transactionType={transactionType}
+          categoryIds={categoryIds}
+          comparePrevious={comparePrevious}
+          comparisonRange={comparisonRange}
+          comparisonUnavailable={comparisonUnavailable}
+          comparisonLoading={comparePrevious && isLoading}
+          collapsibleOnMobile
+          mobileExpanded={mobileFiltersExpanded}
+          onPresetChange={filters.setPreset}
+          onFromChange={filters.setFrom}
+          onToChange={filters.setTo}
+          onTransactionTypeChange={(value) => {
+            setTransactionType(value);
+            setCategoryIds([]);
+            setDetail(null);
+            setRelatedPage(1);
+          }}
+          onCategoryIdsChange={(ids) => {
+            setCategoryIds(ids);
+            setDetail(null);
+            setRelatedPage(1);
+          }}
+          onComparePreviousChange={setComparePrevious}
+          onMobileExpandedChange={setMobileFiltersExpanded}
+          onReset={resetFilters}
+        />
+      </div>
 
       {invalidDateRange && (
         <div className="card border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
@@ -273,6 +392,7 @@ export default function AnalysisPage() {
         <>
           <AnalysisSummaryCards
             totals={data?.totals}
+            previousTotals={data?.previousTotals}
             changes={data?.changes}
             compare={comparePrevious}
             isLoading={isLoading}
@@ -284,7 +404,7 @@ export default function AnalysisPage() {
               rows={data?.trend ?? []}
               grouping={data?.meta.grouping ?? 'DAY'}
               selection={grouping}
-              compare={comparePrevious}
+              compare={comparisonAvailable}
               selectedType={transactionType}
               isLoading={isLoading}
               onGroupingChange={setGrouping}
@@ -298,7 +418,7 @@ export default function AnalysisPage() {
             />
           </div>
 
-          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.85fr)]">
+          <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.85fr)]">
             <BudgetProgress
               budgets={budgets ?? []}
               progress={budgetProgress}
@@ -319,7 +439,7 @@ export default function AnalysisPage() {
             <MerchantSummary
               rows={data?.merchants ?? []}
               selectedType={transactionType}
-              compare={comparePrevious}
+              compare={comparisonAvailable}
               isLoading={isLoading}
               onSelect={selectMerchant}
             />
@@ -333,7 +453,7 @@ export default function AnalysisPage() {
 
           <CategoryDetailsTable
             rows={data?.byCategory ?? []}
-            compare={comparePrevious}
+            comparisonAvailable={comparisonAvailable}
             isLoading={isLoading}
             onSelect={selectCategory}
           />

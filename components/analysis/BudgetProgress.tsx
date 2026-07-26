@@ -90,6 +90,40 @@ export default function BudgetProgress({
     else setFormError('Failed to delete budget.');
   }
 
+  if (
+    !isLoading &&
+    !error &&
+    !expenseAnalysisDisabled &&
+    budgets.length === 0 &&
+    progress.length === 0 &&
+    !isManaging
+  ) {
+    return (
+      <section
+        className="card flex min-h-[176px] min-w-0 items-center p-5"
+        aria-labelledby="empty-budget-title"
+      >
+        <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:items-center">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500">
+            <Target className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="empty-budget-title" className="text-sm font-semibold text-zinc-900">
+              No budget configured
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Create a monthly budget to monitor spending limits.
+            </p>
+          </div>
+          <button type="button" className="btn shrink-0" onClick={openManager}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Create budget
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="card min-w-0 overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-zinc-200 px-4 py-3">

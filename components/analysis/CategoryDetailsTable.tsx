@@ -11,7 +11,7 @@ type SortKey = 'amount' | 'count' | 'change';
 
 type Props = {
   rows: AnalysisCategoryRow[];
-  compare: boolean;
+  comparisonAvailable: boolean;
   isLoading: boolean;
   onSelect: (row: AnalysisCategoryRow) => void;
 };
@@ -49,7 +49,12 @@ function SortButton({
   );
 }
 
-export default function CategoryDetailsTable({ rows, compare, isLoading, onSelect }: Props) {
+export default function CategoryDetailsTable({
+  rows,
+  comparisonAvailable,
+  isLoading,
+  onSelect,
+}: Props) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('amount');
 
@@ -59,36 +64,38 @@ export default function CategoryDetailsTable({ rows, compare, isLoading, onSelec
       .filter((row) => !query || row.name.toLocaleLowerCase('en-MY').includes(query))
       .sort((left, right) => {
         if (sortKey === 'count') return right.count - left.count;
-        if (sortKey === 'change') return (right.change ?? -Infinity) - (left.change ?? -Infinity);
+        if (sortKey === 'change' && comparisonAvailable) {
+          return (right.change ?? -Infinity) - (left.change ?? -Infinity);
+        }
         return right.amount - left.amount;
       });
-  }, [rows, search, sortKey]);
+  }, [comparisonAvailable, rows, search, sortKey]);
 
   function exportCsv() {
-    const headers = [
+    const headers: string[] = [
       'Category',
       'Type',
       'Transactions',
       'Total',
       'Percentage',
       'Average',
-      'Previous Total',
-      'Change',
     ];
-    const lines = visibleRows.map((row) =>
-      [
+    if (comparisonAvailable) headers.push('Previous Total', 'Change');
+
+    const lines = visibleRows.map((row) => {
+      const values: Array<string | number> = [
         row.name,
         row.kind,
         row.count,
         row.amount.toFixed(2),
         row.percentage.toFixed(2),
         row.average.toFixed(2),
-        row.previousAmount.toFixed(2),
-        row.change?.toFixed(2) ?? '',
-      ]
-        .map(csvCell)
-        .join(',')
-    );
+      ];
+      if (comparisonAvailable) {
+        values.push(row.previousAmount.toFixed(2), row.change?.toFixed(2) ?? '');
+      }
+      return values.map(csvCell).join(',');
+    });
     const blob = new Blob([[headers.map(csvCell).join(','), ...lines].join('\n')], {
       type: 'text/csv;charset=utf-8',
     });
@@ -105,7 +112,11 @@ export default function CategoryDetailsTable({ rows, compare, isLoading, onSelec
       <div className="flex flex-col gap-3 border-b border-zinc-200 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-zinc-900">Detailed Category Analysis</h2>
-          <p className="mt-1 text-xs text-zinc-500">Compare category totals, frequency, averages, and change.</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {comparisonAvailable
+              ? 'Compare category totals, frequency, averages, and change.'
+              : 'Review category totals, frequency, averages, and share.'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1 sm:w-52">
@@ -128,14 +139,14 @@ export default function CategoryDetailsTable({ rows, compare, isLoading, onSelec
           <div className="hidden xl:block">
             <table className="w-full table-fixed text-sm">
               <colgroup>
-                <col className="w-[22%]" />
+                <col className={comparisonAvailable ? 'w-[22%]' : 'w-[30%]'} />
                 <col className="w-24" />
                 <col className="w-24" />
                 <col className="w-32" />
                 <col className="w-24" />
                 <col className="w-32" />
-                <col className="w-32" />
-                <col className="w-24" />
+                {comparisonAvailable && <col className="w-32" />}
+                {comparisonAvailable && <col className="w-24" />}
                 <col className="w-16" />
               </colgroup>
               <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-600">
@@ -146,8 +157,14 @@ export default function CategoryDetailsTable({ rows, compare, isLoading, onSelec
                   <th className="px-3 py-3 text-right" scope="col"><SortButton value="amount" label="Total" active={sortKey === 'amount'} onSelect={setSortKey} /></th>
                   <th className="px-3 py-3 text-right" scope="col">Share</th>
                   <th className="hidden px-3 py-3 text-right xl:table-cell" scope="col">Average</th>
-                  <th className="hidden px-3 py-3 text-right xl:table-cell" scope="col">Previous</th>
-                  <th className="px-3 py-3 text-right" scope="col"><SortButton value="change" label="Change" active={sortKey === 'change'} onSelect={setSortKey} /></th>
+                  {comparisonAvailable && (
+                    <th className="px-3 py-3 text-right" scope="col">Previous</th>
+                  )}
+                  {comparisonAvailable && (
+                    <th className="px-3 py-3 text-right" scope="col">
+                      <SortButton value="change" label="Change" active={sortKey === 'change'} onSelect={setSortKey} />
+                    </th>
+                  )}
                   <th className="px-3 py-3" scope="col"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -164,8 +181,16 @@ export default function CategoryDetailsTable({ rows, compare, isLoading, onSelec
                     <td className="px-3 py-3 text-right font-semibold tabular-nums text-zinc-950">{formatCurrency(row.amount)}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-zinc-700">{row.percentage.toFixed(1)}%</td>
                     <td className="hidden px-3 py-3 text-right tabular-nums text-zinc-700 xl:table-cell">{formatCurrency(row.average)}</td>
-                    <td className="hidden px-3 py-3 text-right tabular-nums text-zinc-700 xl:table-cell">{compare ? formatCurrency(row.previousAmount) : '-'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-zinc-700">{compare ? changeLabel(row.change) : '-'}</td>
+                    {comparisonAvailable && (
+                      <td className="px-3 py-3 text-right tabular-nums text-zinc-700">
+                        {formatCurrency(row.previousAmount)}
+                      </td>
+                    )}
+                    {comparisonAvailable && (
+                      <td className="px-3 py-3 text-right tabular-nums text-zinc-700">
+                        {changeLabel(row.change)}
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-right">
                       <button type="button" className="icon-btn" aria-label={`View ${row.name} transactions`} title="View transactions" onClick={() => onSelect(row)}>
                         <Eye className="h-4 w-4" aria-hidden="true" />
@@ -190,10 +215,16 @@ export default function CategoryDetailsTable({ rows, compare, isLoading, onSelec
                     <span className="mt-1 block text-xs text-zinc-500">{row.percentage.toFixed(1)}% share</span>
                   </span>
                 </span>
-                <span className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                <span
+                  className={`mt-3 grid gap-3 text-xs ${
+                    comparisonAvailable ? 'grid-cols-3' : 'grid-cols-2'
+                  }`}
+                >
                   <span><span className="block text-zinc-500">Transactions</span><span className="mt-0.5 block font-medium tabular-nums text-zinc-800">{row.count}</span></span>
                   <span><span className="block text-zinc-500">Average</span><span className="mt-0.5 block font-medium tabular-nums text-zinc-800">{formatCurrency(row.average)}</span></span>
-                  <span><span className="block text-zinc-500">Change</span><span className="mt-0.5 block font-medium tabular-nums text-zinc-800">{compare ? changeLabel(row.change) : '-'}</span></span>
+                  {comparisonAvailable && (
+                    <span><span className="block text-zinc-500">Change</span><span className="mt-0.5 block font-medium tabular-nums text-zinc-800">{changeLabel(row.change)}</span></span>
+                  )}
                 </span>
               </button>
             ))}

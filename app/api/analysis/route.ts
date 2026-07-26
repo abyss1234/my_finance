@@ -122,7 +122,7 @@ export async function GET(req: Request) {
     const type = parseType(searchParams.get('type'));
     const from = parseDate(searchParams.get('from'));
     const to = parseDate(searchParams.get('to'));
-    const compare = searchParams.get('compare') !== 'false';
+    const compare = searchParams.get('compare') === 'true';
     const preset = searchParams.get('preset');
     const requestedGrouping = parseGrouping(searchParams.get('grouping'));
     const rawCategoryIds = searchParams.getAll('categoryId').filter(Boolean);

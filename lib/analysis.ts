@@ -43,7 +43,7 @@ function amountOf(transaction: AnalysisTransaction) {
 }
 
 function percentageChange(current: number, previous: number) {
-  if (previous === 0) return current === 0 ? 0 : null;
+  if (previous === 0) return null;
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
@@ -395,7 +395,8 @@ export function buildAnalysisResponse(
   options: AnalysisOptions
 ): AnalysisResponse {
   const totals = summarize(items);
-  const previousTotals = options.compare ? summarize(previousItems) : null;
+  const previousDataAvailable = options.compare && previousItems.length > 0;
+  const previousTotals = previousDataAvailable ? summarize(previousItems) : null;
   const changes = {
     income: previousTotals ? percentageChange(totals.income, previousTotals.income) : null,
     expense: previousTotals ? percentageChange(totals.expense, previousTotals.expense) : null,
@@ -411,7 +412,7 @@ export function buildAnalysisResponse(
   const merchants = aggregateMerchants(items, previousItems, options.merchantType);
   const trend = aggregateTrend(items, options.grouping, options.from, options.to);
 
-  if (options.compare && options.previousFrom && options.previousTo) {
+  if (previousDataAvailable && options.previousFrom && options.previousTo) {
     const previousTrend = aggregateTrend(
       previousItems,
       options.grouping,
@@ -460,6 +461,7 @@ export function buildAnalysisResponse(
       to: options.to?.toISOString() ?? null,
       previousFrom: options.previousFrom?.toISOString() ?? null,
       previousTo: options.previousTo?.toISOString() ?? null,
+      previousDataAvailable,
       days,
     },
   };

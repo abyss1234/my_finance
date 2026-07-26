@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { ChevronDown, ListFilter } from 'lucide-react';
+import { ChevronDown, ListFilter, RotateCcw } from 'lucide-react';
 import CategoryMultiSelect from '@/components/CategoryMultiSelect';
 import { DatePreset, datePresetLabels } from '@/lib/finance';
 import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
@@ -13,11 +13,17 @@ type CommonProps = {
   from: string;
   to: string;
   comparePrevious?: boolean;
+  comparisonRange?: string;
+  comparisonUnavailable?: boolean;
+  comparisonLoading?: boolean;
   collapsibleOnMobile?: boolean;
+  mobileExpanded?: boolean;
   onPresetChange: (value: DatePreset) => void;
   onFromChange: (value: string) => void;
   onToChange: (value: string) => void;
   onComparePreviousChange?: (value: boolean) => void;
+  onMobileExpandedChange?: (value: boolean) => void;
+  onReset?: () => void;
 };
 
 type SingleCategoryProps = {
@@ -45,19 +51,35 @@ export default function FinanceFilters(props: Props) {
     from,
     to,
     comparePrevious,
+    comparisonRange,
+    comparisonUnavailable = false,
+    comparisonLoading = false,
     collapsibleOnMobile = false,
+    mobileExpanded,
     onPresetChange,
     onFromChange,
     onToChange,
     onComparePreviousChange,
+    onMobileExpandedChange,
+    onReset,
   } = props;
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [internalMobileOpen, setInternalMobileOpen] = useState(false);
+  const mobileOpen = mobileExpanded ?? internalMobileOpen;
   const isTransactionFilter = props.mode === 'transactions';
+  const customRange = preset === 'CUSTOM';
   const hasComparison =
     comparePrevious !== undefined && onComparePreviousChange !== undefined;
   const visibleCategories = isTransactionFilter
     ? categories.filter((category) => category.kind === props.transactionType)
     : categories;
+
+  function setMobileOpen(value: boolean) {
+    if (onMobileExpandedChange) {
+      onMobileExpandedChange(value);
+      return;
+    }
+    setInternalMobileOpen(value);
+  }
 
   return (
     <section className="card p-4" aria-labelledby={`${id}-title`}>
@@ -66,21 +88,29 @@ export default function FinanceFilters(props: Props) {
         <h2 id={`${id}-title`} className="text-sm font-semibold text-zinc-900">
           Filters
         </h2>
-        {collapsibleOnMobile && (
-          <button
-            type="button"
-            className="icon-btn ml-auto sm:hidden"
-            aria-label={mobileOpen ? 'Collapse filters' : 'Expand filters'}
-            aria-expanded={mobileOpen}
-            aria-controls={`${id}-fields`}
-            onClick={() => setMobileOpen((current) => !current)}
-          >
-            <ChevronDown
-              className={`h-4 w-4 transition ${mobileOpen ? 'rotate-180' : ''}`}
-              aria-hidden="true"
-            />
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-1">
+          {onReset && (
+            <button type="button" className="btn min-h-8 px-2 text-xs" onClick={onReset}>
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              Reset filters
+            </button>
+          )}
+          {collapsibleOnMobile && (
+            <button
+              type="button"
+              className="icon-btn sm:hidden"
+              aria-label={mobileOpen ? 'Collapse filters' : 'Expand filters'}
+              aria-expanded={mobileOpen}
+              aria-controls={`${id}-fields`}
+              onClick={() => setMobileOpen(!mobileOpen)}
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition ${mobileOpen ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
+          )}
+        </div>
       </div>
 
       <div
@@ -112,9 +142,14 @@ export default function FinanceFilters(props: Props) {
           <input
             id={`${id}-from`}
             type="date"
-            className="input"
+            className={`input ${customRange ? '' : 'cursor-default bg-zinc-50 text-zinc-600'}`}
             value={from}
-            onChange={(event) => onFromChange(event.target.value)}
+            readOnly={!customRange}
+            aria-readonly={!customRange}
+            title={customRange ? undefined : 'Select Custom Range to edit this date'}
+            onChange={(event) => {
+              if (customRange) onFromChange(event.target.value);
+            }}
           />
         </div>
 
@@ -125,9 +160,14 @@ export default function FinanceFilters(props: Props) {
           <input
             id={`${id}-to`}
             type="date"
-            className="input"
+            className={`input ${customRange ? '' : 'cursor-default bg-zinc-50 text-zinc-600'}`}
             value={to}
-            onChange={(event) => onToChange(event.target.value)}
+            readOnly={!customRange}
+            aria-readonly={!customRange}
+            title={customRange ? undefined : 'Select Custom Range to edit this date'}
+            onChange={(event) => {
+              if (customRange) onToChange(event.target.value);
+            }}
           />
         </div>
 
@@ -190,7 +230,7 @@ export default function FinanceFilters(props: Props) {
         {hasComparison && (
           <div className="lg:col-span-2">
             <span id={`${id}-compare-label`} className="label">
-              Previous period
+              Compare with previous period
             </span>
             <button
               type="button"
@@ -215,6 +255,21 @@ export default function FinanceFilters(props: Props) {
               </span>
             </button>
           </div>
+        )}
+
+        {hasComparison && comparePrevious && (
+          <p
+            className={`sm:col-span-2 lg:col-span-12 text-xs ${
+              comparisonUnavailable ? 'text-amber-700' : 'text-zinc-500'
+            }`}
+            aria-live="polite"
+          >
+            {comparisonLoading
+              ? 'Loading previous-period range...'
+              : comparisonRange
+                ? `Previous period: ${comparisonRange}${comparisonUnavailable ? ' - No previous-period data' : ''}`
+                : 'Previous-period range is unavailable.'}
+          </p>
         )}
       </div>
     </section>

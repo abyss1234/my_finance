@@ -86,6 +86,7 @@ export type AnalysisResponse = {
     to: string | null;
     previousFrom: string | null;
     previousTo: string | null;
+    previousDataAvailable: boolean;
     days: number;
   };
 };

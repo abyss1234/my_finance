@@ -52,7 +52,7 @@ export const datePresetLabels: Record<DatePreset, string> = {
   THIS_YEAR: 'This Year',
   TODAY: 'Today',
   ALL: 'All Time',
-  CUSTOM: 'Custom',
+  CUSTOM: 'Custom Range',
 };
 
 export function formatCurrency(value: number) {

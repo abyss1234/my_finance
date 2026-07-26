@@ -16,6 +16,7 @@ import type { TransactionKind } from '@/lib/transactionTypes';
 
 type Props = {
   totals?: AnalysisTotals;
+  previousTotals?: AnalysisTotals | null;
   changes?: AnalysisChanges;
   compare: boolean;
   isLoading: boolean;
@@ -27,8 +28,10 @@ type SummaryCardProps = {
   value: string;
   detail: string;
   change: number | null;
+  previousValue: string | null;
   changeUnit?: 'percent' | 'points';
   compare: boolean;
+  comparisonAvailable: boolean;
   positiveChangeIsGood: boolean;
   tone: 'income' | 'expense' | 'positive' | 'negative' | 'neutral' | 'savings';
   icon: LucideIcon;
@@ -60,8 +63,10 @@ function SummaryCard({
   value,
   detail,
   change,
+  previousValue,
   changeUnit = 'percent',
   compare,
+  comparisonAvailable,
   positiveChangeIsGood,
   tone,
   icon: Icon,
@@ -69,13 +74,22 @@ function SummaryCard({
   disabled,
   onClick,
 }: SummaryCardProps) {
-  const hasChange = compare && change !== null;
+  const hasChange = compare && comparisonAvailable && change !== null;
   const isImprovement = change !== null && (change >= 0) === positiveChangeIsGood;
-  const ChangeIcon = change === 0 ? Minus : change !== null && change > 0 ? TrendingUp : TrendingDown;
+  const ChangeIcon =
+    !comparisonAvailable || change === null || change === 0
+      ? Minus
+      : change > 0
+        ? TrendingUp
+        : TrendingDown;
   const changeLabel =
-    change === null
-      ? 'No previous value'
-      : `${change > 0 ? '+' : ''}${change.toFixed(1)}${changeUnit === 'points' ? ' pts' : '%'}`;
+    !comparisonAvailable
+      ? 'No previous-period data'
+      : change === null
+        ? previousValue === null
+          ? 'Previous value unavailable'
+          : `Previous: ${previousValue}`
+        : `${change > 0 ? '+' : ''}${change.toFixed(1)}${changeUnit === 'points' ? ' pts' : '%'} vs previous period`;
 
   return (
     <button
@@ -102,17 +116,17 @@ function SummaryCard({
       </div>
 
       <div className="mt-3 min-h-10 text-xs">
-        {compare && (
+        {compare && !isLoading && (
           <p
             className={`flex items-center gap-1 font-medium ${
               !hasChange ? 'text-zinc-500' : isImprovement ? 'text-emerald-700' : 'text-rose-700'
             }`}
           >
             <ChangeIcon className="h-3.5 w-3.5" aria-hidden="true" />
-            {changeLabel} vs previous period
+            {changeLabel}
           </p>
         )}
-        <p className={`${compare ? 'mt-1' : ''} text-zinc-500`}>{detail}</p>
+        <p className={`${compare && !isLoading ? 'mt-1' : ''} text-zinc-500`}>{detail}</p>
       </div>
     </button>
   );
@@ -120,6 +134,7 @@ function SummaryCard({
 
 export default function AnalysisSummaryCards({
   totals,
+  previousTotals,
   changes,
   compare,
   isLoading,
@@ -129,6 +144,7 @@ export default function AnalysisSummaryCards({
   const expense = totals?.expense ?? 0;
   const net = totals?.net ?? 0;
   const netTone = net > 0 ? 'positive' : net < 0 ? 'negative' : 'neutral';
+  const comparisonAvailable = previousTotals !== null && previousTotals !== undefined;
 
   return (
     <section className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4" aria-label="Financial summary">
@@ -137,7 +153,9 @@ export default function AnalysisSummaryCards({
         value={formatCurrency(income)}
         detail={`${totals?.incomeCount ?? 0} income transaction${totals?.incomeCount === 1 ? '' : 's'}`}
         change={changes?.income ?? null}
+        previousValue={previousTotals ? formatCurrency(previousTotals.income) : null}
         compare={compare}
+        comparisonAvailable={comparisonAvailable}
         positiveChangeIsGood
         tone="income"
         icon={ArrowUpRight}
@@ -150,7 +168,9 @@ export default function AnalysisSummaryCards({
         value={formatCurrency(expense)}
         detail={`${totals?.expenseCount ?? 0} expense transaction${totals?.expenseCount === 1 ? '' : 's'}`}
         change={changes?.expense ?? null}
+        previousValue={previousTotals ? formatCurrency(previousTotals.expense) : null}
         compare={compare}
+        comparisonAvailable={comparisonAvailable}
         positiveChangeIsGood={false}
         tone="expense"
         icon={ArrowDownRight}
@@ -163,7 +183,9 @@ export default function AnalysisSummaryCards({
         value={formatCurrency(net)}
         detail={net > 0 ? 'Positive cash flow' : net < 0 ? 'Negative cash flow' : 'Balanced cash flow'}
         change={changes?.net ?? null}
+        previousValue={previousTotals ? formatCurrency(previousTotals.net) : null}
         compare={compare}
+        comparisonAvailable={comparisonAvailable}
         positiveChangeIsGood
         tone={netTone}
         icon={Scale}
@@ -176,8 +198,14 @@ export default function AnalysisSummaryCards({
         value={totals?.savingsRate === null || totals?.savingsRate === undefined ? '-' : `${totals.savingsRate.toFixed(1)}%`}
         detail="Net cash flow as a share of income"
         change={changes?.savingsRate ?? null}
+        previousValue={
+          previousTotals?.savingsRate === null || previousTotals?.savingsRate === undefined
+            ? null
+            : `${previousTotals.savingsRate.toFixed(1)}%`
+        }
         changeUnit="points"
         compare={compare}
+        comparisonAvailable={comparisonAvailable}
         positiveChangeIsGood
         tone="savings"
         icon={Percent}
