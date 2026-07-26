@@ -34,6 +34,8 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           amount: Number(formData.get('amount')),
           date: typeof date === 'string' && date ? dateTimeInputToIso(date) : undefined,
           note: (formData.get('note') as string) || undefined,
+          source: (formData.get('source') as string) || undefined,
+          counterparty: (formData.get('counterparty') as string) || undefined,
           categoryId: Number(formData.get('categoryId')),
         }),
       });
@@ -107,6 +109,20 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           <div className="sm:col-span-2 xl:col-span-4">
             <label className="label" htmlFor="transaction-note">Note</label>
             <input id="transaction-note" name="note" type="text" className="input" placeholder="Optional" />
+          </div>
+          <div className="xl:col-span-6">
+            <label className="label" htmlFor="transaction-source">Bank / E-wallet</label>
+            <select id="transaction-source" name="source" className="select">
+              <option value="">Select source</option>
+              <option value="MAE">MAE</option>
+              <option value="TNG eWallet">TNG eWallet</option>
+              <option value="CIMB">CIMB</option>
+              <option value="Cash">Cash</option>
+            </select>
+          </div>
+          <div className="xl:col-span-6">
+            <label className="label" htmlFor="transaction-counterparty">Person / Shop</label>
+            <input id="transaction-counterparty" name="counterparty" type="text" className="input" placeholder="Optional" />
           </div>
         </div>
 

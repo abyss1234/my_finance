@@ -8,6 +8,8 @@ type CreateTransactionBody = {
   date?: unknown;
   note?: unknown;
   categoryId?: unknown;
+  source?: unknown;
+  counterparty?: unknown;
 };
 
 function parseTransactionType(value: string | null) {
@@ -19,6 +21,10 @@ function parseDate(value: string | null) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function parseOptionalText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 export async function GET(req: Request) {
@@ -98,7 +104,7 @@ export async function POST(req: Request) {
     const amount = Number(body.amount);
     const categoryId = Number(body.categoryId);
     let date: Date | undefined = new Date();
-    const note = typeof body.note === 'string' && body.note.trim() ? body.note.trim() : null;
+    const note = parseOptionalText(body.note);
 
     if (typeof body.date === 'string' && body.date) {
       date = parseDate(body.date) ?? undefined;
@@ -135,6 +141,8 @@ export async function POST(req: Request) {
         date,
         note,
         categoryId,
+        source: parseOptionalText(body.source),
+        counterparty: parseOptionalText(body.counterparty),
       },
     });
 

@@ -115,7 +115,7 @@ export default function FinanceFilters(props: Props) {
 
       <div
         id={`${id}-fields`}
-        className={`${collapsibleOnMobile && !mobileOpen ? 'hidden' : 'grid'} grid-cols-1 gap-3 sm:grid sm:grid-cols-2 lg:grid-cols-12`}
+        className={`${collapsibleOnMobile && !mobileOpen ? 'hidden' : 'grid'} grid-cols-1 gap-3 sm:grid sm:grid-cols-2 sm:items-end lg:grid-cols-12`}
       >
         <div className={hasComparison ? 'lg:col-span-2' : 'lg:col-span-3'}>
           <label className="label" htmlFor={`${id}-preset`}>
