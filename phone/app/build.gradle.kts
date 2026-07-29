@@ -1,9 +1,10 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
-    namespace = "com.example.fin_notif"
+    namespace = "com.myfinance.notifier"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -11,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.fin_notif"
+        applicationId = "com.myfinance.notifier"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -27,6 +28,9 @@ android {
             }
         }
     }
+    buildFeatures {
+        compose = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -34,10 +38,15 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.appcompat)
+    val composeBom = platform(libs.androidx.compose.bom)
+
+    implementation(composeBom)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.core.ktx)
-    implementation(libs.material)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.work.runtime.ktx)
+
     testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
 }

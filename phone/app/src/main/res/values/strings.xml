@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">FIn_notif</string>
+    <string name="app_name">Finance Notifier</string>
+    <string name="notification_listener_name">Finance notification forwarding</string>
 </resources>
