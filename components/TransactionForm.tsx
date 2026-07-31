@@ -1,11 +1,26 @@
 'use client';
 
 import useSWR from 'swr';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { ArrowDownRight, ArrowUpRight, Plus } from 'lucide-react';
 import { authFetch, fetcher } from '@/lib/apiClient';
 import { dateTimeInputToIso } from '@/lib/finance';
 import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
+
+const MAX_AMOUNT_CENTS = 999_999_999_999;
+
+function formatAmount(cents: number) {
+  const digits = String(cents).padStart(3, '0');
+  return `${digits.slice(0, -2)}.${digits.slice(-2)}`;
+}
+
+function parseAmountInput(value: string) {
+  const digits = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return 0;
+
+  const cents = Number(digits);
+  return Number.isSafeInteger(cents) ? Math.min(cents, MAX_AMOUNT_CENTS) : MAX_AMOUNT_CENTS;
+}
 
 export default function TransactionForm({ onCreated }: { onCreated?: () => void }) {
   const { data: categories, error: categoriesError } = useSWR<CategoryOption[]>(
@@ -13,6 +28,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
     fetcher
   );
   const [type, setType] = useState<TransactionKind>('EXPENSE');
+  const [amountCents, setAmountCents] = useState(0);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const options = useMemo(
@@ -22,6 +38,12 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
 
   async function submit(formData: FormData) {
     setError('');
+
+    if (amountCents === 0) {
+      setError('Amount must be greater than zero.');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -31,7 +53,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type,
-          amount: Number(formData.get('amount')),
+          amount: amountCents / 100,
           date: typeof date === 'string' && date ? dateTimeInputToIso(date) : undefined,
           note: (formData.get('note') as string) || undefined,
           source: (formData.get('source') as string) || undefined,
@@ -42,6 +64,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
 
       if (response.ok) {
         (document.getElementById('tx-form') as HTMLFormElement)?.reset();
+        setAmountCents(0);
         onCreated?.();
         return;
       }
@@ -52,6 +75,29 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
       setError('Failed to save transaction.');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  function handleAmountKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (/^\d$/.test(event.key)) {
+      event.preventDefault();
+      const digit = Number(event.key);
+      setAmountCents((current) => {
+        const next = current * 10 + digit;
+        return next <= MAX_AMOUNT_CENTS ? next : current;
+      });
+      return;
+    }
+
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      setAmountCents((current) => Math.floor(current / 10));
+      return;
+    }
+
+    if (event.key === 'Delete') {
+      event.preventDefault();
+      setAmountCents(0);
     }
   }
 
@@ -93,7 +139,26 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-12">
           <div className="xl:col-span-2">
             <label className="label" htmlFor="transaction-amount">Amount</label>
-            <input id="transaction-amount" name="amount" type="number" step="0.01" min="0" required className="input" placeholder="0.00" />
+            <input
+              id="transaction-amount"
+              name="amount"
+              type="text"
+              inputMode="numeric"
+              required
+              className="input text-right tabular-nums"
+              value={formatAmount(amountCents)}
+              onChange={(event) => setAmountCents(parseAmountInput(event.target.value))}
+              onKeyDown={handleAmountKeyDown}
+              onFocus={(event) => {
+                const end = event.currentTarget.value.length;
+                event.currentTarget.setSelectionRange(end, end);
+              }}
+              onClick={(event) => {
+                const end = event.currentTarget.value.length;
+                event.currentTarget.setSelectionRange(end, end);
+              }}
+              autoComplete="off"
+            />
           </div>
           <div className="xl:col-span-3">
             <label className="label" htmlFor="transaction-date">Date and time</label>
