@@ -3,6 +3,7 @@ package com.myfinance.notifier.notification
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import com.myfinance.notifier.data.SettingsRepository
 import com.myfinance.notifier.model.DeliveryState
 import com.myfinance.notifier.model.DeliveryStatus
@@ -14,6 +15,9 @@ import java.security.MessageDigest
 class FinanceNotificationListener : NotificationListenerService() {
     private val settingsRepository by lazy {
         SettingsRepository(applicationContext)
+    }
+    private val recentNotificationStore by lazy {
+        RecentNotificationStore(applicationContext)
     }
 
     override fun onNotificationPosted(statusBarNotification: StatusBarNotification?) {
@@ -35,23 +39,47 @@ class FinanceNotificationListener : NotificationListenerService() {
         val title = statusBarNotification.notification.readTitle()
         val text = statusBarNotification.notification.readText()
         if (text.isBlank()) return
+        val eventId = createEventId(
+            packageName = monitoredApp.packageName,
+            postTime = statusBarNotification.postTime,
+            title = title,
+            text = text,
+        )
+        val isNewNotification = recentNotificationStore
+            .markIfNew(eventId, System.currentTimeMillis())
+            .getOrElse { error ->
+                recordListenerError(
+                    "Could not check notification history: ${error.safeMessage()}"
+                )
+                return
+            }
+
+        if (!isNewNotification) {
+            Log.i(
+                TAG,
+                "Duplicate notification ignored: eventId=${eventId.take(LOG_EVENT_ID_LENGTH)}",
+            )
+            return
+        }
 
         val payload = NotificationPayload(
             app = monitoredApp.displayName,
             title = title.take(MAX_TITLE_LENGTH),
             text = text.take(MAX_TEXT_LENGTH),
             time = statusBarNotification.postTime.toString(),
-            eventId = createEventId(
-                packageName = monitoredApp.packageName,
-                notificationKey = statusBarNotification.key,
-                postTime = statusBarNotification.postTime,
-                title = title,
-                text = text,
-            ),
+            eventId = eventId,
         )
 
         NotificationUploadWorker.enqueue(applicationContext, payload)
             .onFailure { error ->
+                recentNotificationStore.forget(eventId)
+                    .onFailure { cleanupError ->
+                        Log.e(
+                            TAG,
+                            "Could not clear failed event from notification history.",
+                            cleanupError,
+                        )
+                    }
                 recordListenerError(
                     "Could not queue the notification: ${error.safeMessage()}"
                 )
@@ -90,12 +118,11 @@ class FinanceNotificationListener : NotificationListenerService() {
 
     private fun createEventId(
         packageName: String,
-        notificationKey: String,
         postTime: Long,
         title: String,
         text: String,
     ): String {
-        val source = "$packageName|$notificationKey|$postTime|$title|$text"
+        val source = "$packageName|$postTime|$title|$text"
         return MessageDigest.getInstance("SHA-256")
             .digest(source.toByteArray(Charsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(byte) }
@@ -115,6 +142,8 @@ class FinanceNotificationListener : NotificationListenerService() {
         message?.take(160)?.takeIf { it.isNotBlank() } ?: javaClass.simpleName
 
     private companion object {
+        const val TAG = "FinanceNotification"
+        const val LOG_EVENT_ID_LENGTH = 12
         const val MAX_TITLE_LENGTH = 500
         const val MAX_TEXT_LENGTH = 5_000
     }

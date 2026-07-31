@@ -2,7 +2,6 @@ package com.myfinance.notifier.network
 
 import android.content.Context
 import android.util.Log
-import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -24,7 +23,6 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -38,6 +36,29 @@ class NotificationUploadWorker(
     override suspend fun doWork(): Result {
         val payload = readPayload()
             ?: return failPermanently("The queued notification data is incomplete.")
+
+        if (runAttemptCount > 0) {
+            val message = "Automatic retry skipped to prevent a duplicate upload."
+            Log.w(
+                TAG,
+                "Upload retry skipped: eventId=${payload.eventId.take(LOG_EVENT_ID_LENGTH)}, " +
+                    "attempt=${runAttemptCount + 1}",
+            )
+            recordStatus(
+                DeliveryStatus(
+                    state = DeliveryState.ERROR,
+                    message = "$message Check the web app to confirm the first attempt arrived.",
+                    timestampMillis = System.currentTimeMillis(),
+                )
+            )
+            return Result.success()
+        }
+
+        Log.d(
+            TAG,
+            "Upload started: eventId=${payload.eventId.take(LOG_EVENT_ID_LENGTH)}, " +
+                "attempt=${runAttemptCount + 1}",
+        )
 
         recordStatus(
             DeliveryStatus(
@@ -75,6 +96,10 @@ class NotificationUploadWorker(
             }
         ) {
             is UploadAttempt.Success -> {
+                Log.i(
+                    TAG,
+                    "Upload succeeded: eventId=${payload.eventId.take(LOG_EVENT_ID_LENGTH)}",
+                )
                 recordStatus(
                     DeliveryStatus(
                         state = DeliveryState.SUCCESS,
@@ -89,8 +114,14 @@ class NotificationUploadWorker(
                 failPermanently(attempt.message)
             }
 
-            is UploadAttempt.RetryableFailure -> {
-                retryOrFail(attempt.message)
+            is UploadAttempt.TemporaryFailure -> {
+                Log.w(
+                    TAG,
+                    "Upload failed with retry disabled: " +
+                        "eventId=${payload.eventId.take(LOG_EVENT_ID_LENGTH)}, " +
+                        "reason=${attempt.message}",
+                )
+                failPermanently("${attempt.message} Automatic retry is disabled.")
             }
         }
     }
@@ -140,7 +171,7 @@ class NotificationUploadWorker(
                 }
 
                 408, 429 -> {
-                    UploadAttempt.RetryableFailure(
+                    UploadAttempt.TemporaryFailure(
                         "The server is temporarily unavailable (HTTP $responseCode)."
                     )
                 }
@@ -152,21 +183,21 @@ class NotificationUploadWorker(
                 }
 
                 in 500..599 -> {
-                    UploadAttempt.RetryableFailure(
+                    UploadAttempt.TemporaryFailure(
                         "The server returned an error (HTTP $responseCode)."
                     )
                 }
 
                 else -> {
-                    UploadAttempt.RetryableFailure(
+                    UploadAttempt.TemporaryFailure(
                         "Unexpected server response (HTTP $responseCode)."
                     )
                 }
             }
         } catch (_: SocketTimeoutException) {
-            UploadAttempt.RetryableFailure("The connection timed out.")
+            UploadAttempt.TemporaryFailure("The connection timed out.")
         } catch (_: IOException) {
-            UploadAttempt.RetryableFailure("The phone could not reach the server.")
+            UploadAttempt.TemporaryFailure("The phone could not reach the server.")
         } catch (error: Exception) {
             UploadAttempt.PermanentFailure(
                 "The request could not be prepared: ${error.safeMessage()}"
@@ -174,21 +205,6 @@ class NotificationUploadWorker(
         } finally {
             connection.disconnect()
         }
-    }
-
-    private fun retryOrFail(message: String): Result {
-        if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
-            return failPermanently("$message Retry limit reached.")
-        }
-
-        recordStatus(
-            DeliveryStatus(
-                state = DeliveryState.QUEUED,
-                message = "$message Android will retry.",
-                timestampMillis = System.currentTimeMillis(),
-            )
-        )
-        return Result.retry()
     }
 
     private fun failPermanently(message: String): Result {
@@ -230,11 +246,12 @@ class NotificationUploadWorker(
     private sealed interface UploadAttempt {
         data class Success(val message: String) : UploadAttempt
         data class PermanentFailure(val message: String) : UploadAttempt
-        data class RetryableFailure(val message: String) : UploadAttempt
+        data class TemporaryFailure(val message: String) : UploadAttempt
     }
 
     companion object {
         private const val TAG = "NotificationUpload"
+        private const val LOG_EVENT_ID_LENGTH = 12
         private const val KEY_APP = "app"
         private const val KEY_TITLE = "title"
         private const val KEY_TEXT = "text"
@@ -244,7 +261,6 @@ class NotificationUploadWorker(
         private const val WORK_TAG = "finance_notification_upload"
         private const val CONNECT_TIMEOUT_MILLIS = 15_000
         private const val READ_TIMEOUT_MILLIS = 15_000
-        private const val MAX_RETRY_ATTEMPTS = 4
 
         fun enqueue(
             context: Context,
@@ -263,11 +279,6 @@ class NotificationUploadWorker(
             val request = OneTimeWorkRequestBuilder<NotificationUploadWorker>()
                 .setInputData(inputData)
                 .setConstraints(constraints)
-                .setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL,
-                    30,
-                    TimeUnit.SECONDS,
-                )
                 .addTag(WORK_TAG)
                 .build()
 
