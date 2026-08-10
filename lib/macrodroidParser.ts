@@ -65,6 +65,21 @@ function parseStructuredNotification(
     };
   }
 
+  const maeFpxPayment = text.match(
+    /^Successful payment of RM\s*([\d,]+(?:\.\d{1,2})?)\s+to\s+(.+?)\s+on\s+.+?\.\s*Did not perform this transaction\?\s*Please call\s+.+?\.\s*FPX ID:\s*(.+?)\s*$/i
+  );
+
+  if (/^MAE$/i.test(app) && /Maybank2u:\s*FPX Payments/i.test(title) && maeFpxPayment) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(maeFpxPayment[1]),
+      source: app,
+      counterparty: cleanName(maeFpxPayment[2]),
+      externalRef: cleanName(maeFpxPayment[3]),
+      date,
+    };
+  }
+
   const maeFundsReceived = text.match(
     /^You['\u2019]ve just received RM\s*([\d,]+(?:\.\d{1,2})?)\s+in your account ending\s+(.+?)\.\s*REF:\s*(.+?)\s*$/i
   );
