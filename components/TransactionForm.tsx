@@ -6,6 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Plus } from 'lucide-react';
 import { authFetch, fetcher } from '@/lib/apiClient';
 import { dateTimeInputToIso } from '@/lib/finance';
 import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
+import CounterpartyCombobox from '@/components/CounterpartyCombobox';
 
 const MAX_AMOUNT_CENTS = 999_999_999_999;
 
@@ -27,8 +28,13 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
     '/api/categories',
     fetcher
   );
+  const { data: counterparties, mutate: refreshCounterparties } = useSWR<string[]>(
+    '/api/counterparties',
+    fetcher
+  );
   const [type, setType] = useState<TransactionKind>('EXPENSE');
   const [amountCents, setAmountCents] = useState(0);
+  const [counterparty, setCounterparty] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const options = useMemo(
@@ -57,7 +63,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           date: typeof date === 'string' && date ? dateTimeInputToIso(date) : undefined,
           note: (formData.get('note') as string) || undefined,
           source: (formData.get('source') as string) || undefined,
-          counterparty: (formData.get('counterparty') as string) || undefined,
+          counterparty: counterparty || undefined,
           categoryId: Number(formData.get('categoryId')),
         }),
       });
@@ -65,6 +71,8 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
       if (response.ok) {
         (document.getElementById('tx-form') as HTMLFormElement)?.reset();
         setAmountCents(0);
+        setCounterparty('');
+        void refreshCounterparties();
         onCreated?.();
         return;
       }
@@ -102,7 +110,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
   }
 
   return (
-    <form id="tx-form" className="card overflow-hidden" action={submit}>
+    <form id="tx-form" className="card" action={submit}>
       <div className="border-b border-zinc-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-zinc-900">Add Transaction</h2>
         <p className="mt-1 text-xs text-zinc-500">Record a new income or expense entry.</p>
@@ -187,7 +195,13 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           </div>
           <div className="xl:col-span-6">
             <label className="label" htmlFor="transaction-counterparty">Person / Shop</label>
-            <input id="transaction-counterparty" name="counterparty" type="text" className="input" placeholder="Optional" />
+            <CounterpartyCombobox
+              id="transaction-counterparty"
+              name="counterparty"
+              options={counterparties ?? []}
+              value={counterparty}
+              onChange={setCounterparty}
+            />
           </div>
         </div>
 
