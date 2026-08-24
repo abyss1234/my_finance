@@ -1,23 +1,44 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import type { CounterpartyOption } from '@/lib/transactionTypes';
 
 export async function GET() {
   try {
     const rows = await prisma.transaction.findMany({
       where: { counterparty: { not: null } },
-      distinct: ['counterparty'],
-      select: { counterparty: true },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        counterparty: true,
+        type: true,
+        categoryId: true,
+        category: { select: { name: true } },
+      },
     });
 
-    const names = new Map<string, string>();
+    const options = new Map<string, CounterpartyOption>();
     for (const row of rows) {
       const name = row.counterparty?.trim();
-      if (name) names.set(name.toLocaleLowerCase('en-MY'), name);
+      if (!name) continue;
+
+      const key = name.toLocaleLowerCase('en-MY');
+      const option = options.get(key) ?? {
+        name,
+        categoryIds: { INCOME: null, EXPENSE: null },
+      };
+
+      if (
+        option.categoryIds[row.type] === null &&
+        row.category.name.toLocaleLowerCase('en-MY') !== 'uncategorized'
+      ) {
+        option.categoryIds[row.type] = row.categoryId;
+      }
+
+      options.set(key, option);
     }
 
     return NextResponse.json(
-      [...names.values()].sort((first, second) =>
-        first.localeCompare(second, 'en-MY', { sensitivity: 'base' })
+      [...options.values()].sort((first, second) =>
+        first.name.localeCompare(second.name, 'en-MY', { sensitivity: 'base' })
       )
     );
   } catch {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { parseMacroDroidNotification } from '@/lib/macrodroidParser';
+import { findPreviousCategoryId } from '@/lib/autoCategory';
 
 export const runtime = 'nodejs';
 
@@ -81,7 +82,11 @@ export async function POST(req: Request) {
   let savedTransaction = null;
 
   if (parsedNotification) {
-    const categoryId = await getUncategorizedCategoryId(parsedNotification.type);
+    const categoryId =
+      (await findPreviousCategoryId(
+        parsedNotification.type,
+        parsedNotification.counterparty
+      )) ?? (await getUncategorizedCategoryId(parsedNotification.type));
 
     savedTransaction = await prisma.transaction.create({
       data: {

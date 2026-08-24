@@ -6,6 +6,11 @@ export type CategoryOption = {
   kind: TransactionKind;
 };
 
+export type CounterpartyOption = {
+  name: string;
+  categoryIds: Record<TransactionKind, number | null>;
+};
+
 export type TransactionRow = {
   id: number;
   type: TransactionKind;

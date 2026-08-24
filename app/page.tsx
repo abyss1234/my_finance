@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate as mutateCache } from 'swr';
 import { RefreshCw } from 'lucide-react';
 import PageHeader, { SectionHeader } from '@/components/PageHeader';
 import SummaryCards from '@/components/SummaryCards';
@@ -30,7 +30,7 @@ export default function HomePage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refreshAll = async () => {
-    await mutate();
+    await Promise.all([mutate(), mutateCache('/api/counterparties')]);
     setRefreshKey((key) => key + 1);
   };
 

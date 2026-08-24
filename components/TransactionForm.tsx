@@ -5,10 +5,15 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import { ArrowDownRight, ArrowUpRight, Plus } from 'lucide-react';
 import { authFetch, fetcher } from '@/lib/apiClient';
 import { dateTimeInputToIso } from '@/lib/finance';
-import type { CategoryOption, TransactionKind } from '@/lib/transactionTypes';
-import CounterpartyCombobox from '@/components/CounterpartyCombobox';
+import type {
+  CategoryOption,
+  CounterpartyOption,
+  TransactionKind,
+} from '@/lib/transactionTypes';
+import EditableCombobox from '@/components/EditableCombobox';
 
 const MAX_AMOUNT_CENTS = 999_999_999_999;
+const SOURCE_OPTIONS = ['MAE', 'TNG eWallet', 'CIMB', 'Cash', 'Others'];
 
 function formatAmount(cents: number) {
   const digits = String(cents).padStart(3, '0');
@@ -28,19 +33,60 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
     '/api/categories',
     fetcher
   );
-  const { data: counterparties, mutate: refreshCounterparties } = useSWR<string[]>(
+  const { data: counterparties, mutate: refreshCounterparties } = useSWR<CounterpartyOption[]>(
     '/api/counterparties',
     fetcher
   );
   const [type, setType] = useState<TransactionKind>('EXPENSE');
   const [amountCents, setAmountCents] = useState(0);
+  const [categoryId, setCategoryId] = useState('');
+  const [categoryIsAutomatic, setCategoryIsAutomatic] = useState(false);
+  const [source, setSource] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const options = useMemo(
+  const categoryOptions = useMemo(
     () => (categories ?? []).filter((category) => category.kind === type),
     [categories, type]
   );
+  const counterpartyNames = useMemo(
+    () => (counterparties ?? []).map((option) => option.name),
+    [counterparties]
+  );
+
+  function previousCategoryId(name: string, kind: TransactionKind) {
+    const normalizedName = name.trim().toLocaleLowerCase('en-MY');
+    if (!normalizedName) return null;
+
+    return (
+      counterparties?.find(
+        (option) => option.name.toLocaleLowerCase('en-MY') === normalizedName
+      )?.categoryIds[kind] ?? null
+    );
+  }
+
+  function changeType(nextType: TransactionKind) {
+    setError('');
+    if (nextType === type) return;
+
+    const previousId = previousCategoryId(counterparty, nextType);
+    setType(nextType);
+    setCategoryId(previousId ? String(previousId) : '');
+    setCategoryIsAutomatic(Boolean(previousId));
+  }
+
+  function changeCounterparty(value: string) {
+    const previousId = previousCategoryId(value, type);
+    setCounterparty(value);
+
+    if (previousId && (!categoryId || categoryIsAutomatic)) {
+      setCategoryId(String(previousId));
+      setCategoryIsAutomatic(true);
+    } else if (!previousId && categoryIsAutomatic) {
+      setCategoryId('');
+      setCategoryIsAutomatic(false);
+    }
+  }
 
   async function submit(formData: FormData) {
     setError('');
@@ -62,15 +108,18 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           amount: amountCents / 100,
           date: typeof date === 'string' && date ? dateTimeInputToIso(date) : undefined,
           note: (formData.get('note') as string) || undefined,
-          source: (formData.get('source') as string) || undefined,
+          source: source || undefined,
           counterparty: counterparty || undefined,
-          categoryId: Number(formData.get('categoryId')),
+          categoryId: Number(categoryId),
         }),
       });
 
       if (response.ok) {
         (document.getElementById('tx-form') as HTMLFormElement)?.reset();
         setAmountCents(0);
+        setCategoryId('');
+        setCategoryIsAutomatic(false);
+        setSource('');
         setCounterparty('');
         void refreshCounterparties();
         onCreated?.();
@@ -122,10 +171,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
             type="button"
             aria-pressed={type === 'EXPENSE'}
             className={`inline-flex h-8 items-center gap-1.5 rounded px-3 text-sm font-medium transition focus-visible:ring-2 focus-visible:ring-zinc-400 ${type === 'EXPENSE' ? 'bg-white text-rose-700 shadow-sm' : 'text-zinc-600 hover:text-zinc-950'}`}
-            onClick={() => {
-              setType('EXPENSE');
-              setError('');
-            }}
+            onClick={() => changeType('EXPENSE')}
           >
             <ArrowDownRight className="h-4 w-4" aria-hidden="true" />
             Expense
@@ -134,10 +180,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
             type="button"
             aria-pressed={type === 'INCOME'}
             className={`inline-flex h-8 items-center gap-1.5 rounded px-3 text-sm font-medium transition focus-visible:ring-2 focus-visible:ring-zinc-400 ${type === 'INCOME' ? 'bg-white text-emerald-700 shadow-sm' : 'text-zinc-600 hover:text-zinc-950'}`}
-            onClick={() => {
-              setType('INCOME');
-              setError('');
-            }}
+            onClick={() => changeType('INCOME')}
           >
             <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             Income
@@ -174,9 +217,19 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           </div>
           <div className="xl:col-span-3">
             <label className="label" htmlFor="transaction-category">Category</label>
-            <select id="transaction-category" name="categoryId" required className="select">
+            <select
+              id="transaction-category"
+              name="categoryId"
+              required
+              className="select"
+              value={categoryId}
+              onChange={(event) => {
+                setCategoryId(event.target.value);
+                setCategoryIsAutomatic(false);
+              }}
+            >
               <option value="">Select</option>
-              {options.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              {categoryOptions.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
           </div>
           <div className="sm:col-span-2 xl:col-span-4">
@@ -185,22 +238,25 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
           </div>
           <div className="xl:col-span-6">
             <label className="label" htmlFor="transaction-source">Bank / E-wallet</label>
-            <select id="transaction-source" name="source" className="select">
-              <option value="">Select source</option>
-              <option value="MAE">MAE</option>
-              <option value="TNG eWallet">TNG eWallet</option>
-              <option value="CIMB">CIMB</option>
-              <option value="Cash">Cash</option>
-            </select>
+            <EditableCombobox
+              id="transaction-source"
+              name="source"
+              options={SOURCE_OPTIONS}
+              value={source}
+              dropdownLabel="Bank and E-wallet options"
+              onChange={setSource}
+            />
           </div>
           <div className="xl:col-span-6">
             <label className="label" htmlFor="transaction-counterparty">Person / Shop</label>
-            <CounterpartyCombobox
+            <EditableCombobox
               id="transaction-counterparty"
               name="counterparty"
-              options={counterparties ?? []}
+              options={counterpartyNames}
               value={counterparty}
-              onChange={setCounterparty}
+              dropdownLabel="Saved people and shops"
+              emptyMessage="No matching saved names."
+              onChange={changeCounterparty}
             />
           </div>
         </div>
@@ -212,7 +268,7 @@ export default function TransactionForm({ onCreated }: { onCreated?: () => void 
         )}
 
         <div className="mt-4 flex justify-end">
-          <button className="btn border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800" disabled={isSaving || options.length === 0}>
+          <button className="btn border-zinc-950 bg-zinc-950 text-white hover:bg-zinc-800" disabled={isSaving || categoryOptions.length === 0}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             {isSaving ? 'Saving...' : `Add ${type === 'EXPENSE' ? 'Expense' : 'Income'}`}
           </button>
