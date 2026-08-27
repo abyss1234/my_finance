@@ -184,6 +184,25 @@ function parseStructuredNotification(
     };
   }
 
+  const tngMerchantReferencePayment = text.match(
+    /^(.+?):\s*RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been deducted from your TNG eWallet\.\s*Merchant Reference No\.\s*(.+?)\s*$/i
+  );
+
+  if (
+    /^TNG eWallet$/i.test(app) &&
+    /^Payment To:\s*.+$/i.test(title) &&
+    tngMerchantReferencePayment
+  ) {
+    return {
+      type: TransactionType.EXPENSE,
+      amount: parseAmount(tngMerchantReferencePayment[2]),
+      source: app,
+      counterparty: cleanName(tngMerchantReferencePayment[1]),
+      externalRef: cleanName(tngMerchantReferencePayment[3]),
+      date,
+    };
+  }
+
   const tngMerchantPayment = text.match(
     /^.+?:\s*RM\s*([\d,]+(?:\.\d{1,2})?)\s+has been deducted from your TNG eWallet\.\s*Your payment to\s+(.+?)\s+for account Number\s+(.+?)\s+is pending acceptance on merchant side\.?$/i
   );
