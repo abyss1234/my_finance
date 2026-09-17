@@ -298,8 +298,10 @@ export default function AnalysisPage() {
   }
 
   function selectTrend(row: TrendPoint, type?: TransactionKind) {
-    const period = row.date === row.endDate ? row.date : `${row.date} to ${row.endDate}`;
-    showDetail({ label: detailLabel(period, type), type, from: row.date, to: row.endDate });
+    const from = filters.from && filters.from > row.date ? filters.from : row.date;
+    const to = filters.to && filters.to < row.endDate ? filters.to : row.endDate;
+    const period = from === to ? from : `${from} to ${to}`;
+    showDetail({ label: detailLabel(period, type), type, from, to });
   }
 
   function selectInsight(insight: AnalysisInsight) {
