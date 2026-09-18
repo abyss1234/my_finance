@@ -14,6 +14,7 @@ type CommonProps = {
   to: string;
   comparePrevious?: boolean;
   comparisonRange?: string;
+  comparisonLabel?: string;
   comparisonUnavailable?: boolean;
   comparisonLoading?: boolean;
   collapsibleOnMobile?: boolean;
@@ -52,6 +53,7 @@ export default function FinanceFilters(props: Props) {
     to,
     comparePrevious,
     comparisonRange,
+    comparisonLabel = 'Previous period',
     comparisonUnavailable = false,
     comparisonLoading = false,
     collapsibleOnMobile = false,
@@ -267,7 +269,7 @@ export default function FinanceFilters(props: Props) {
             {comparisonLoading
               ? 'Loading previous-period range...'
               : comparisonRange
-                ? `Previous period: ${comparisonRange}${comparisonUnavailable ? ' - No previous-period data' : ''}`
+                ? `${comparisonLabel}: ${comparisonRange}${comparisonUnavailable ? ' - No previous-period data' : ''}`
                 : 'Previous-period range is unavailable.'}
           </p>
         )}

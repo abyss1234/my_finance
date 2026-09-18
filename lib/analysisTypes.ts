@@ -1,4 +1,5 @@
 import type { TransactionKind } from '@/lib/transactionTypes';
+import type { AnalysisPeriodMode } from '@/lib/analysisPeriods';
 
 export type AnalysisGrouping = 'DAY' | 'WEEK' | 'MONTH';
 export type GroupingSelection = 'AUTO' | AnalysisGrouping;
@@ -63,6 +64,7 @@ export type AnalysisInsight = {
   type?: TransactionKind;
   categoryId?: number;
   counterparty?: string;
+  period?: 'current' | 'previous';
 };
 
 export type AnalysisResponse = {
@@ -87,6 +89,7 @@ export type AnalysisResponse = {
     previousFrom: string | null;
     previousTo: string | null;
     previousDataAvailable: boolean;
+    periodMode: AnalysisPeriodMode;
     days: number;
   };
 };

@@ -7,7 +7,7 @@ import {
 } from '@/lib/analysis';
 import type { AnalysisGrouping } from '@/lib/analysisTypes';
 import { prisma } from '@/lib/db';
-import { dateInputToIso, malaysiaDateKey } from '@/lib/finance';
+import { resolveAnalysisPeriods } from '@/lib/analysisPeriods';
 
 function parseDate(value: string | null) {
   if (!value) return null;
@@ -26,64 +26,6 @@ function parseGrouping(value: string | null): AnalysisGrouping | null {
     return normalized;
   }
   return null;
-}
-
-function keyDate(key: string) {
-  return new Date(`${key}T00:00:00.000Z`);
-}
-
-function dateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function rangeFromKeys(from: string, to: string) {
-  return {
-    from: new Date(dateInputToIso(from, 'start')),
-    to: new Date(dateInputToIso(to, 'end')),
-  };
-}
-
-function previousRange(from: Date | null, to: Date | null, preset: string | null) {
-  if (!from || !to) return { from: null, to: null };
-
-  const fromKey = malaysiaDateKey(from);
-  const toKey = malaysiaDateKey(to);
-
-  if (preset === 'THIS_WEEK') {
-    const previousFrom = keyDate(fromKey);
-    const previousTo = keyDate(toKey);
-    previousFrom.setUTCDate(previousFrom.getUTCDate() - 7);
-    previousTo.setUTCDate(previousTo.getUTCDate() - 7);
-    return rangeFromKeys(dateKey(previousFrom), dateKey(previousTo));
-  }
-
-  if (preset === 'THIS_MONTH' || preset === 'LAST_MONTH') {
-    const previousFrom = keyDate(`${fromKey.slice(0, 7)}-01`);
-    previousFrom.setUTCMonth(previousFrom.getUTCMonth() - 1, 1);
-    const previousTo = new Date(previousFrom);
-    previousTo.setUTCMonth(previousTo.getUTCMonth() + 1, 0);
-    return rangeFromKeys(dateKey(previousFrom), dateKey(previousTo));
-  }
-
-  if (preset === 'LAST_3_MONTHS') {
-    const previousTo = keyDate(fromKey);
-    previousTo.setUTCDate(previousTo.getUTCDate() - 1);
-    const previousFrom = keyDate(fromKey);
-    previousFrom.setUTCMonth(previousFrom.getUTCMonth() - 3, 1);
-    return rangeFromKeys(dateKey(previousFrom), dateKey(previousTo));
-  }
-
-  if (preset === 'THIS_YEAR') {
-    const year = Number(fromKey.slice(0, 4)) - 1;
-    return rangeFromKeys(`${year}-01-01`, `${year}-12-31`);
-  }
-
-  const duration = to.getTime() - from.getTime();
-  const previousTo = new Date(from.getTime() - 1);
-  return {
-    from: new Date(previousTo.getTime() - duration),
-    to: previousTo,
-  };
 }
 
 function transactionWhere(
@@ -135,9 +77,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
     }
 
-    const previous = compare ? previousRange(from, to, preset) : { from: null, to: null };
-    const grouping = resolveAnalysisGrouping(from, to, requestedGrouping);
-    const currentWhere = transactionWhere(type, categoryIds, from, to);
+    const { current, previous, mode } = resolveAnalysisPeriods(from, to, preset, compare);
+    const grouping = resolveAnalysisGrouping(current.from, current.to, requestedGrouping);
+    const currentWhere = transactionWhere(type, categoryIds, current.from, current.to);
     const previousWhere = transactionWhere(type, categoryIds, previous.from, previous.to);
 
     const [items, previousItems] = await Promise.all([
@@ -160,12 +102,13 @@ export async function GET(req: Request) {
         items as AnalysisTransaction[],
         previousItems as AnalysisTransaction[],
         {
-          from,
-          to,
+          from: current.from,
+          to: current.to,
           previousFrom: previous.from,
           previousTo: previous.to,
           grouping,
           compare,
+          periodMode: mode,
           merchantType: type ?? TransactionType.EXPENSE,
         }
       )

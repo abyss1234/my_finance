@@ -9,6 +9,7 @@ import type {
   TrendPoint,
 } from '@/lib/analysisTypes';
 import { formatCurrency, malaysiaDateKey } from '@/lib/finance';
+import type { AnalysisPeriodMode } from '@/lib/analysisPeriods';
 
 export type AnalysisTransaction = {
   id: number;
@@ -32,6 +33,7 @@ type AnalysisOptions = {
   grouping: AnalysisGrouping;
   compare: boolean;
   merchantType: TransactionType;
+  periodMode?: AnalysisPeriodMode;
 };
 
 const dayMs = 24 * 60 * 60 * 1000;
@@ -190,6 +192,15 @@ function aggregateCategories(
   }
 
   for (const transaction of previousItems) {
+    if (!current.has(transaction.categoryId)) {
+      current.set(transaction.categoryId, {
+        categoryId: transaction.categoryId,
+        name: transaction.category?.name ?? 'Uncategorized',
+        kind: transaction.category?.kind ?? transaction.type,
+        amount: 0,
+        count: 0,
+      });
+    }
     previous.set(
       transaction.categoryId,
       (previous.get(transaction.categoryId) ?? 0) + amountOf(transaction)
@@ -256,52 +267,60 @@ function aggregateMerchants(
 function createInsights(
   items: AnalysisTransaction[],
   totals: AnalysisTotals,
+  previousTotals: AnalysisTotals | null,
   changes: AnalysisResponse['changes'],
   categories: AnalysisCategoryRow[],
-  merchants: MerchantAnalysisRow[]
+  merchants: MerchantAnalysisRow[],
+  kind: TransactionType
 ) {
   const insights: AnalysisInsight[] = [];
+  if (totals.totalCount === 0 && !previousTotals) return insights;
 
-  if (changes.expense !== null && Math.abs(changes.expense) >= 1) {
-    const increased = changes.expense > 0;
+  const incomeMode = kind === TransactionType.INCOME ||
+    (totals.expenseCount === 0 && (previousTotals?.expenseCount ?? 0) === 0);
+  const type = incomeMode ? TransactionType.INCOME : TransactionType.EXPENSE;
+  const amount = incomeMode ? totals.income : totals.expense;
+  const previousAmount = previousTotals
+    ? incomeMode ? previousTotals.income : previousTotals.expense
+    : null;
+  const change = incomeMode ? changes.income : changes.expense;
+  const difference = previousAmount === null ? 0 : Math.round((amount - previousAmount) * 100) / 100;
+  const relevantCategories = categories.filter((category) => category.kind === type);
+
+  if (previousAmount !== null && difference !== 0) {
+    const increased = difference > 0;
     insights.push({
-      id: 'expense-change',
-      title: `Expenses ${increased ? 'increased' : 'decreased'} by ${Math.abs(changes.expense).toFixed(1)}%`,
-      description: `You spent ${formatCurrency(totals.expense)} in the selected period.`,
-      tone: increased ? 'warning' : 'positive',
-      type: 'EXPENSE',
+      id: incomeMode ? 'income-change' : 'expense-change',
+      title: `${incomeMode ? 'Income' : 'Spending'} ${increased ? 'increased' : 'decreased'} by ${formatCurrency(Math.abs(difference))}`,
+      description: `${formatCurrency(amount)} this period vs ${formatCurrency(previousAmount)} previously.${change === null ? '' : ` ${Math.abs(change).toFixed(1)}% ${increased ? 'higher' : 'lower'}.`}`,
+      tone: increased === incomeMode ? 'positive' : 'warning',
+      type,
+      period: (incomeMode ? totals.incomeCount : totals.expenseCount) === 0 ? 'previous' : 'current',
     });
   }
 
-  const topExpense = categories.find((category) => category.kind === TransactionType.EXPENSE);
-  if (topExpense) {
+  const contributor = previousTotals ? relevantCategories
+    .filter((category) => {
+      const delta = Math.round((category.amount - category.previousAmount) * 100) / 100;
+      return delta !== 0 && (difference === 0 || Math.sign(delta) === Math.sign(difference));
+    })
+    .sort((left, right) =>
+      Math.abs(right.amount - right.previousAmount) - Math.abs(left.amount - left.previousAmount)
+    )[0] : undefined;
+  if (contributor) {
+    const delta = Math.round((contributor.amount - contributor.previousAmount) * 100) / 100;
+    const direction = delta > 0 ? 'increase' : 'decrease';
+    const contribution = difference !== 0 && Math.abs(delta) <= Math.abs(difference)
+      ? `${(Math.abs(delta / difference) * 100).toFixed(0)}% of the overall ${direction}.`
+      : `The largest category ${direction}, offset by changes elsewhere.`;
     insights.push({
-      id: 'top-expense-category',
-      title: `${topExpense.name} was your highest spending category`,
-      description: `${formatCurrency(topExpense.amount)} across ${topExpense.count} transaction${topExpense.count === 1 ? '' : 's'}.`,
-      tone: 'neutral',
-      type: 'EXPENSE',
-      categoryId: topExpense.categoryId,
-    });
-  }
-
-  const growingCategory = categories
-    .filter(
-      (category) =>
-        category.kind === TransactionType.EXPENSE &&
-        category.previousAmount > 0 &&
-        category.change !== null &&
-        category.change > 20
-    )
-    .sort((left, right) => (right.change ?? 0) - (left.change ?? 0))[0];
-  if (growingCategory) {
-    insights.push({
-      id: 'growing-category',
-      title: `${growingCategory.name} spending rose ${growingCategory.change?.toFixed(1)}%`,
-      description: `An increase of ${formatCurrency(growingCategory.amount - growingCategory.previousAmount)} from the previous period.`,
-      tone: 'warning',
-      type: 'EXPENSE',
-      categoryId: growingCategory.categoryId,
+      id: 'category-change',
+      title: `${contributor.name} ${delta > 0 ? 'rose' : 'fell'} by ${formatCurrency(Math.abs(delta))}`,
+      description: `${contribution} ${formatCurrency(contributor.amount)} now vs ${formatCurrency(contributor.previousAmount)} previously.`,
+      tone: (delta > 0) === incomeMode ? 'positive' : 'warning',
+      type,
+      categoryId: contributor.categoryId,
+      period: contributor.count === 0 ? 'previous' : 'current',
     });
   }
 
@@ -317,19 +336,15 @@ function createInsights(
     });
   }
 
-  const categoryAverages = new Map(
-    categories.map((category) => [category.categoryId, category.average])
-  );
-  const unusual = items.filter((transaction) => {
-    const average = categoryAverages.get(transaction.categoryId) ?? 0;
-    return average > 0 && amountOf(transaction) >= average * 2.5;
-  });
-  if (unusual.length > 0) {
+  const topCategory = relevantCategories.find((category) => category.count > 0 && category.amount > 0);
+  if (topCategory && topCategory.categoryId !== contributor?.categoryId) {
     insights.push({
-      id: 'unusual-transactions',
-      title: `${unusual.length} unusually large transaction${unusual.length === 1 ? '' : 's'} detected`,
-      description: 'These transactions were at least 2.5 times their category average.',
-      tone: 'warning',
+      id: 'top-category',
+      title: `${topCategory.name} is your largest ${incomeMode ? 'income category' : 'expense category'}`,
+      description: `${formatCurrency(topCategory.amount)} across ${topCategory.count} transaction${topCategory.count === 1 ? '' : 's'}; ${topCategory.percentage.toFixed(1)}% of ${incomeMode ? 'income' : 'spending'}.`,
+      tone: 'neutral',
+      type,
+      categoryId: topCategory.categoryId,
     });
   }
 
@@ -408,8 +423,9 @@ export function buildAnalysisResponse(
         ? totals.savingsRate - previousTotals.savingsRate
         : null,
   };
-  const categories = aggregateCategories(items, previousItems, totals);
-  const merchants = aggregateMerchants(items, previousItems, options.merchantType);
+  const comparisonItems = previousDataAvailable ? previousItems : [];
+  const categories = aggregateCategories(items, comparisonItems, totals);
+  const merchants = aggregateMerchants(items, comparisonItems, options.merchantType);
   const trend = aggregateTrend(items, options.grouping, options.from, options.to);
 
   if (previousDataAvailable && options.previousFrom && options.previousTo) {
@@ -437,7 +453,7 @@ export function buildAnalysisResponse(
     0
   );
   const highestSpendingCategory = categories.find(
-    (category) => category.kind === TransactionType.EXPENSE
+    (category) => category.kind === TransactionType.EXPENSE && category.count > 0
   );
 
   return {
@@ -448,7 +464,7 @@ export function buildAnalysisResponse(
     trend,
     byCategory: categories,
     merchants,
-    insights: createInsights(items, totals, changes, categories, merchants),
+    insights: createInsights(items, totals, previousTotals, changes, categories, merchants, options.merchantType),
     secondary: {
       averageDailySpending: totals.expense / days,
       largestExpense,
@@ -462,6 +478,7 @@ export function buildAnalysisResponse(
       previousFrom: options.previousFrom?.toISOString() ?? null,
       previousTo: options.previousTo?.toISOString() ?? null,
       previousDataAvailable,
+      periodMode: options.periodMode ?? 'full-period',
       days,
     },
   };

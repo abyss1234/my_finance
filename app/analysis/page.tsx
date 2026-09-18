@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
+import { ChevronDown } from 'lucide-react';
 import AnalysisSummaryCards from '@/components/analysis/AnalysisSummaryCards';
 import BudgetProgress from '@/components/analysis/BudgetProgress';
 import CategoryBarChart from '@/components/analysis/CategoryBarChart';
@@ -141,6 +142,17 @@ export default function AnalysisPage() {
     revalidateOnFocus: false,
   });
 
+  const effectiveFrom = data?.meta.from ? malaysiaDateKey(data.meta.from) : filters.from;
+  const effectiveTo = data?.meta.to ? malaysiaDateKey(data.meta.to) : filters.to;
+  const currentRange = effectiveFrom && effectiveTo
+    ? `${shortDateFormatter.format(dateKeyToDate(effectiveFrom))} - ${shortDateFormatter.format(dateKeyToDate(effectiveTo))}`
+    : 'Selected period';
+  const periodLabel = data?.meta.periodMode === 'month-to-date'
+    ? 'Month to date'
+    : data?.meta.periodMode === 'matched-days'
+      ? 'Matching days in each month'
+      : 'Selected period';
+
   const periods = useMemo(() => budgetPeriods(filters.from, filters.to), [filters.from, filters.to]);
   const currentPeriod = malaysiaDateKey(new Date()).slice(0, 7);
   const budgetQuery = useMemo(() => {
@@ -174,6 +186,11 @@ export default function AnalysisPage() {
   const comparisonUnavailable = Boolean(
     comparePrevious && !isLoading && data && !data.meta.previousDataAvailable
   );
+  const comparisonLabel = data?.meta.periodMode === 'month-to-date'
+    ? 'Same days last month'
+    : data?.meta.periodMode === 'matched-days'
+      ? 'Previous month (limited to its number of days)'
+      : 'Previous period';
 
   const stickyFilterSummary = useMemo(() => {
     const typeLabel =
@@ -193,7 +210,9 @@ export default function AnalysisPage() {
           : `${categoryIds.length} Categories`;
 
     return [
-      compactDateLabel(filters.preset, filters.from, filters.to),
+      data?.meta.periodMode && data.meta.periodMode !== 'full-period'
+        ? `${periodLabel}: ${currentRange}`
+        : compactDateLabel(filters.preset, filters.from, filters.to),
       typeLabel,
       categoryLabel,
       comparePrevious ? 'Compare On' : 'Compare Off',
@@ -206,11 +225,14 @@ export default function AnalysisPage() {
     filters.preset,
     filters.to,
     transactionType,
+    data,
+    periodLabel,
+    currentRange,
   ]);
 
   const relatedQuery = useMemo(() => {
     const params = new URLSearchParams();
-    applyDateRange(params, detail?.from ?? filters.from, detail?.to ?? filters.to);
+    applyDateRange(params, detail?.from ?? effectiveFrom, detail?.to ?? effectiveTo);
 
     const effectiveType = detail?.type ?? transactionType;
     const effectiveCategories = detail?.categoryIds ?? categoryIds;
@@ -220,14 +242,14 @@ export default function AnalysisPage() {
     params.set('page', String(relatedPage));
     params.set('pageSize', '10');
     return `/api/transactions?${params.toString()}`;
-  }, [filters.from, filters.to, transactionType, categoryIds, detail, relatedPage]);
+  }, [effectiveFrom, effectiveTo, transactionType, categoryIds, detail, relatedPage]);
 
   const {
     data: related,
     error: relatedError,
     isLoading: relatedLoading,
     mutate: mutateRelated,
-  } = useSWR<TransactionResponse>(invalidDateRange ? null : relatedQuery, fetcher, {
+  } = useSWR<TransactionResponse>(invalidDateRange || !data ? null : relatedQuery, fetcher, {
     revalidateOnFocus: false,
   });
 
@@ -242,23 +264,30 @@ export default function AnalysisPage() {
     : 1;
 
   const insights = useMemo(() => {
-    const budgetInsights: AnalysisInsight[] = budgetProgress
-      .filter((row) => row.percentage > 90)
-      .slice(0, 2)
-      .map((row) => ({
-        id: `budget-${row.scopeKey}`,
-        title: row.percentage > 100
-          ? `${row.name} is over budget`
-          : `${row.name} has reached ${row.percentage.toFixed(0)}% of budget`,
-        description: row.remaining < 0
-          ? `Spending exceeded the limit by ${formatCurrency(Math.abs(row.remaining))}.`
-          : `${formatCurrency(row.remaining)} remains.`,
-        tone: row.percentage > 100 ? 'negative' : 'warning',
-        type: 'EXPENSE',
-        categoryId: row.categoryId ?? undefined,
-      }));
-    return [...(data?.insights ?? []), ...budgetInsights].slice(0, 7);
-  }, [data?.insights, budgetProgress]);
+    const candidates = data?.insights ?? [];
+    const monthlyBudgetApplies = !budgetError && transactionType !== 'INCOME' &&
+      (filters.preset === 'THIS_MONTH' || filters.preset === 'LAST_MONTH') &&
+      data?.meta.periodMode !== 'matched-days';
+    const budget = monthlyBudgetApplies ? budgetProgress
+      .filter((row) => row.budget > 0 && row.spent > 0 &&
+        (categoryIds.length === 0 || (row.categoryId !== null && categoryIds.includes(String(row.categoryId)))))
+      .sort((left, right) => right.percentage - left.percentage)[0] : undefined;
+    if (!budget) return candidates.slice(0, 3);
+
+    const budgetInsight: AnalysisInsight = {
+      id: `budget-${budget.scopeKey}`,
+      title: budget.remaining < 0
+        ? `${budget.name} is ${formatCurrency(Math.abs(budget.remaining))} over budget`
+        : `${budget.name} has ${formatCurrency(budget.remaining)} remaining`,
+      description: `${formatCurrency(budget.spent)} of the ${formatCurrency(budget.budget)} monthly budget used (${budget.percentage.toFixed(0)}%).`,
+      tone: budget.remaining < 0 ? 'negative' : budget.percentage >= 90 ? 'warning' : 'neutral',
+      type: 'EXPENSE',
+      categoryId: budget.categoryId ?? undefined,
+    };
+    return budget.remaining < 0
+      ? [budgetInsight, ...candidates].slice(0, 3)
+      : [...candidates.slice(0, 2), budgetInsight].slice(0, 3);
+  }, [data, budgetProgress, budgetError, transactionType, filters.preset, categoryIds]);
 
   function showDetail(next: AnalysisDetailFilter) {
     setDetail(next);
@@ -272,7 +301,7 @@ export default function AnalysisPage() {
   }
 
   function detailLabel(subject: string, type?: TransactionKind) {
-    return [subject, datePresetLabels[filters.preset], type === 'INCOME' ? 'Income' : type === 'EXPENSE' ? 'Expense' : null]
+    return [subject, currentRange, type === 'INCOME' ? 'Income' : type === 'EXPENSE' ? 'Expense' : null]
       .filter(Boolean)
       .join(' - ');
   }
@@ -298,19 +327,24 @@ export default function AnalysisPage() {
   }
 
   function selectTrend(row: TrendPoint, type?: TransactionKind) {
-    const from = filters.from && filters.from > row.date ? filters.from : row.date;
-    const to = filters.to && filters.to < row.endDate ? filters.to : row.endDate;
+    const from = effectiveFrom && effectiveFrom > row.date ? effectiveFrom : row.date;
+    const to = effectiveTo && effectiveTo < row.endDate ? effectiveTo : row.endDate;
     const period = from === to ? from : `${from} to ${to}`;
     showDetail({ label: detailLabel(period, type), type, from, to });
   }
 
   function selectInsight(insight: AnalysisInsight) {
+    const previous = insight.period === 'previous';
     showDetail({
-      label: detailLabel(insight.title, insight.type),
+      label: previous
+        ? `${insight.title} - Previous period: ${comparisonRange}`
+        : detailLabel(insight.title, insight.type),
       type: insight.type,
       categoryIds: insight.categoryId ? [String(insight.categoryId)] : undefined,
       counterparty:
         insight.counterparty === 'Unknown' ? '__UNKNOWN__' : insight.counterparty,
+      from: previous && data?.meta.previousFrom ? malaysiaDateKey(data.meta.previousFrom) : undefined,
+      to: previous && data?.meta.previousTo ? malaysiaDateKey(data.meta.previousTo) : undefined,
     });
   }
 
@@ -348,12 +382,13 @@ export default function AnalysisPage() {
           categories={categories ?? []}
           preset={filters.preset}
           presetOptions={analysisPresets}
-          from={filters.from}
-          to={filters.to}
+          from={effectiveFrom}
+          to={effectiveTo}
           transactionType={transactionType}
           categoryIds={categoryIds}
           comparePrevious={comparePrevious}
           comparisonRange={comparisonRange}
+          comparisonLabel={comparisonLabel}
           comparisonUnavailable={comparisonUnavailable}
           comparisonLoading={comparePrevious && isLoading}
           collapsibleOnMobile
@@ -372,7 +407,11 @@ export default function AnalysisPage() {
             setDetail(null);
             setRelatedPage(1);
           }}
-          onComparePreviousChange={setComparePrevious}
+          onComparePreviousChange={(value) => {
+            setComparePrevious(value);
+            setDetail(null);
+            setRelatedPage(1);
+          }}
           onMobileExpandedChange={setMobileFiltersExpanded}
           onReset={resetFilters}
         />
@@ -401,6 +440,13 @@ export default function AnalysisPage() {
             onSelect={selectSummary}
           />
 
+          <FinancialInsights
+            insights={insights}
+            description={`${periodLabel}: ${currentRange}${comparePrevious && comparisonRange ? ` | Compared with ${comparisonRange}` : ''}`}
+            isLoading={isLoading || budgetsLoading}
+            onSelect={selectInsight}
+          />
+
           <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
             <TrendChart
               rows={data?.trend ?? []}
@@ -420,50 +466,58 @@ export default function AnalysisPage() {
             />
           </div>
 
-          <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.85fr)]">
-            <BudgetProgress
-              budgets={budgets ?? []}
-              progress={budgetProgress}
-              categories={categories ?? []}
-              defaultPeriod={periods.at(-1) ?? currentPeriod}
-              isLoading={budgetsLoading}
-              error={Boolean(budgetError)}
-              expenseAnalysisDisabled={transactionType === 'INCOME'}
-              onChanged={mutateBudgets}
-              onSelect={(row) =>
-                showDetail({
-                  label: detailLabel(row.name, 'EXPENSE'),
-                  type: 'EXPENSE',
-                  categoryIds: row.categoryId ? [String(row.categoryId)] : undefined,
-                })
-              }
-            />
-            <MerchantSummary
-              rows={data?.merchants ?? []}
-              selectedType={transactionType}
-              compare={comparisonAvailable}
-              isLoading={isLoading}
-              onSelect={selectMerchant}
-            />
-          </div>
+          <details className="group min-w-0 border-t border-zinc-200 pt-2">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded px-1 text-sm font-semibold text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 [&::-webkit-details-marker]:hidden">
+              Budget and merchant details
+              <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-2 grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.85fr)]">
+              <BudgetProgress
+                budgets={budgets ?? []}
+                progress={budgetProgress}
+                categories={categories ?? []}
+                defaultPeriod={periods.at(-1) ?? currentPeriod}
+                isLoading={budgetsLoading}
+                error={Boolean(budgetError)}
+                expenseAnalysisDisabled={transactionType === 'INCOME'}
+                onChanged={mutateBudgets}
+                onSelect={(row) =>
+                  showDetail({
+                    label: detailLabel(row.name, 'EXPENSE'),
+                    type: 'EXPENSE',
+                    categoryIds: row.categoryId ? [String(row.categoryId)] : undefined,
+                  })
+                }
+              />
+              <MerchantSummary
+                rows={data?.merchants ?? []}
+                selectedType={transactionType}
+                compare={comparisonAvailable}
+                isLoading={isLoading}
+                onSelect={selectMerchant}
+              />
+            </div>
+          </details>
 
-          <FinancialInsights
-            insights={insights}
-            isLoading={isLoading || budgetsLoading}
-            onSelect={selectInsight}
-          />
-
-          <CategoryDetailsTable
-            rows={data?.byCategory ?? []}
-            comparisonAvailable={comparisonAvailable}
-            isLoading={isLoading}
-            onSelect={selectCategory}
-          />
+          <details className="group min-w-0 border-t border-zinc-200 pt-2">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded px-1 text-sm font-semibold text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 [&::-webkit-details-marker]:hidden">
+              Category details
+              <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-2">
+              <CategoryDetailsTable
+                rows={data?.byCategory ?? []}
+                comparisonAvailable={comparisonAvailable}
+                isLoading={isLoading}
+                onSelect={selectCategory}
+              />
+            </div>
+          </details>
 
           <RelatedTransactions
             items={related?.items ?? []}
             detail={detail}
-            isLoading={relatedLoading}
+            isLoading={isLoading || relatedLoading}
             error={Boolean(relatedError)}
             page={related?.page ?? relatedPage}
             totalPages={totalPages}

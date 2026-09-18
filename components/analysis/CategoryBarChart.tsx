@@ -15,7 +15,7 @@ type Props = {
 export default function CategoryBarChart({ rows, selectedType, isLoading, onSelect }: Props) {
   const chartType = selectedType || 'EXPENSE';
   const visibleRows = rows
-    .filter((row) => row.kind === chartType)
+    .filter((row) => row.kind === chartType && row.count > 0)
     .sort((left, right) => right.amount - left.amount)
     .slice(0, 8);
   const maximum = Math.max(...visibleRows.map((row) => row.amount), 0);
