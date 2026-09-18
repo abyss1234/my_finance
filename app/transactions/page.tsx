@@ -1,6 +1,6 @@
 'use client';
 
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import FinanceFilters from '@/components/FinanceFilters';
@@ -28,6 +28,8 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(1);
   const [transactionType, setTransactionType] = useState<'' | TransactionKind>('');
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
+  const { mutate: mutateCache } = useSWRConfig();
   const filters = useFinanceFilters(() => setPage(1));
 
   const { data: categories } = useSWR<CategoryOption[]>('/api/categories', fetcher);
@@ -40,19 +42,32 @@ export default function TransactionsPage() {
     if (fromIso) params.set('from', fromIso);
     if (toIso) params.set('to', toIso);
     if (transactionType) params.set('type', transactionType);
-    categoryIds.forEach((categoryId) => params.append('categoryId', categoryId));
+    if (uncategorizedOnly) {
+      params.set('uncategorized', 'true');
+    } else {
+      categoryIds.forEach((categoryId) => params.append('categoryId', categoryId));
+    }
     params.set('page', String(page));
     params.set('pageSize', String(PAGE_SIZE));
 
     return `/api/transactions?${params.toString()}`;
-  }, [filters.from, filters.to, transactionType, categoryIds, page]);
+  }, [filters.from, filters.to, transactionType, categoryIds, uncategorizedOnly, page]);
 
   const { data, error, isLoading, mutate } = useSWR<ApiData>(query, fetcher, {
     revalidateOnFocus: false,
   });
   const editor = useTransactionEditor({
     afterChange: async () => {
-      await mutate();
+      const updated = await mutate();
+      if (updated) {
+        const lastPage = Math.max(1, Math.ceil(updated.totalCount / updated.pageSize));
+        if (page > lastPage) {
+          const nextQuery = new URL(query, window.location.origin);
+          nextQuery.searchParams.set('page', String(lastPage));
+          await mutateCache(`${nextQuery.pathname}${nextQuery.search}`, undefined);
+          setPage(lastPage);
+        }
+      }
     },
   });
 
@@ -82,6 +97,12 @@ export default function TransactionsPage() {
         to={filters.to}
         transactionType={transactionType}
         categoryIds={categoryIds}
+        uncategorizedOnly={uncategorizedOnly}
+        onUncategorizedOnlyChange={(value) => {
+          setUncategorizedOnly(value);
+          setCategoryIds([]);
+          setPage(1);
+        }}
         onPresetChange={filters.setPreset}
         onFromChange={filters.setFrom}
         onToChange={filters.setTo}
@@ -105,7 +126,7 @@ export default function TransactionsPage() {
       <TransactionTable
         items={data?.items ?? []}
         isLoading={isLoading}
-        emptyMessage="No transactions found."
+        emptyMessage={uncategorizedOnly ? 'No uncategorized transactions match these filters.' : 'No transactions found.'}
         onEdit={editor.openEditor}
         onDelete={editor.removeTransaction}
       />

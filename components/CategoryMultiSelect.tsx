@@ -10,6 +10,7 @@ type Props = {
   selectedIds: string[];
   transactionType: '' | TransactionKind;
   disabled: boolean;
+  disabledLabel?: string;
   onChange: (ids: string[]) => void;
 };
 
@@ -19,6 +20,7 @@ export default function CategoryMultiSelect({
   selectedIds,
   transactionType,
   disabled,
+  disabledLabel = 'Select a type first',
   onChange,
 }: Props) {
   const id = useId();
@@ -30,7 +32,7 @@ export default function CategoryMultiSelect({
   );
 
   const buttonText = disabled
-    ? 'Select a type first'
+    ? disabledLabel
     : selectedCategories.length === 0
       ? `All ${typeLabel} categories`
       : selectedCategories.length === 1

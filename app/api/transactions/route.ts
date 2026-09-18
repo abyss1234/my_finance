@@ -35,6 +35,7 @@ export async function GET(req: Request) {
     const to = parseDate(searchParams.get('to'));
     const counterparty = searchParams.get('counterparty')?.trim() ?? '';
     const rawCategoryIds = searchParams.getAll('categoryId').filter(Boolean);
+    const uncategorizedOnly = searchParams.get('uncategorized') === 'true';
     const requestedPage = Number(searchParams.get('page') || '1');
     const requestedPageSize = Number(searchParams.get('pageSize') || '10');
     const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
@@ -57,7 +58,11 @@ export async function GET(req: Request) {
       if (to) date.lte = to;
       where.date = date;
     }
-    if (categoryIds.length > 0) where.categoryId = { in: [...new Set(categoryIds)] };
+    if (uncategorizedOnly) {
+      where.category = { name: 'Uncategorized' };
+    } else if (categoryIds.length > 0) {
+      where.categoryId = { in: [...new Set(categoryIds)] };
+    }
     if (counterparty === '__UNKNOWN__') {
       where.OR = [{ counterparty: null }, { counterparty: '' }];
     } else if (counterparty) {

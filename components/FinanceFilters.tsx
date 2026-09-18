@@ -37,6 +37,8 @@ type TransactionCategoryProps = {
   mode: 'transactions';
   transactionType: '' | TransactionKind;
   categoryIds: string[];
+  uncategorizedOnly?: boolean;
+  onUncategorizedOnlyChange?: (value: boolean) => void;
   onTransactionTypeChange: (value: '' | TransactionKind) => void;
   onCategoryIdsChange: (ids: string[]) => void;
 };
@@ -198,12 +200,13 @@ export default function FinanceFilters(props: Props) {
                 Category
               </label>
               <CategoryMultiSelect
-                key={props.transactionType || 'all'}
+                key={`${props.transactionType || 'all'}-${Boolean(props.uncategorizedOnly)}`}
                 id={`${id}-category`}
                 categories={visibleCategories}
                 selectedIds={props.categoryIds}
                 transactionType={props.transactionType}
-                disabled={!props.transactionType}
+                disabled={!props.transactionType || Boolean(props.uncategorizedOnly)}
+                disabledLabel={props.uncategorizedOnly ? 'Uncategorized' : undefined}
                 onChange={props.onCategoryIdsChange}
               />
             </div>
@@ -256,6 +259,20 @@ export default function FinanceFilters(props: Props) {
                 />
               </span>
             </button>
+          </div>
+        )}
+
+        {isTransactionFilter && props.onUncategorizedOnlyChange && (
+          <div className="border-t border-zinc-100 pt-2 sm:col-span-2 lg:col-span-12">
+            <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 text-sm text-zinc-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-zinc-300 accent-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
+                checked={props.uncategorizedOnly ?? false}
+                onChange={(event) => props.onUncategorizedOnlyChange?.(event.target.checked)}
+              />
+              Uncategorized only
+            </label>
           </div>
         )}
 
